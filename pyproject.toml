@@ -1,7 +1,18 @@
 [project]
 name = "dagster-uc"
 version = "0.1.0"
-authors = [{name = "Stefan Verbruggen"}, {name = "Ion Koutsouris"}]
+authors = [{name = "Stefan Verbruggen", email="27513235+sverbruggen@users.noreply.github.com"}, {name = "Ion Koutsouris"}]
+description = "CLI for managing user code deployments of a Dagster instance that was deployed on kubernetes."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13"
+]
 dependencies = [
     "kr8s < 1.0",
     "pyhelm3==0.3.3",
@@ -9,6 +20,10 @@ dependencies = [
     "pyyaml",
     "pytz"
 ]
+
+[project.urls]
+Homepage = "https://github.com/ASML-Labs/dagster-uc"
+Issues = "https://github.com/ASML-Labs/dagster-uc/issues"
 
 [build-system]
 requires = ["setuptools", "wheel"]
