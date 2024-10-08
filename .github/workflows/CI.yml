@@ -64,7 +64,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: python-package-distributions
-          path: libraries/**/dist/
+          path: dist/
 
   publish-dagster-uc:
     name: >-
@@ -84,10 +84,10 @@ jobs:
           name: python-package-distributions
           path: my_dists/
       - name: list files
-        run: ls my_dists/dagster-delta/dist/
+        run: ls my_dists/
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: my_dists/dagster-delta/dist/
+          packages-dir: my_dists/
           password: ${{ secrets.PYPI_API_TOKEN_DD }}
           verbose: true
