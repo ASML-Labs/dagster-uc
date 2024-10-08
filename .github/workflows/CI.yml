@@ -1,0 +1,93 @@
+name: dagster-uc CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Linting checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install pypa/build
+        run: make .venv && VIRTUAL_ENV=./.venv
+      - name: CI-check
+        run: source .venv/bin/activate && make ci-check
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install pypa/build
+        run: make .venv && VIRTUAL_ENV=./.venv
+      - name: Execute tests
+        run: source .venv/bin/activate && pytest .
+
+  build:
+    name: Build wheels
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install pypa/build
+        run: make .venv && VIRTUAL_ENV=./.venv
+      - name: Build a binary wheel
+        run: source .venv/bin/activate && python3 -m build -w "."
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: python-package-distributions
+          path: libraries/**/dist/
+
+  publish-dagster-uc:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/dagster-delta
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v3
+        with:
+          name: python-package-distributions
+          path: my_dists/
+      - name: list files
+        run: ls my_dists/dagster-delta/dist/
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: my_dists/dagster-delta/dist/
+          password: ${{ secrets.PYPI_API_TOKEN_DD }}
+          verbose: true
