@@ -1,6 +1,6 @@
 [project]
 name = "dagster-uc"
-version = "0.1.0"
+version = "0.2.0"
 authors = [{name = "Stefan Verbruggen", email="27513235+sverbruggen@users.noreply.github.com"}, {name = "Ion Koutsouris"}]
 description = "CLI for managing user code deployments of a Dagster instance that was deployed on kubernetes."
 readme = "README.md"

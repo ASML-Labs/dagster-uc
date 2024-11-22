@@ -19,8 +19,8 @@ from kr8s.objects import Service as Service
 from kr8s.objects import ServiceAccount as ServiceAccount
 
 from dagster_uc.config import UserCodeDeploymentsConfig
-from dagster_uc.initialize_logger import logger
-from dagster_uc.k8s_configmaps import BASE_CONFIGMAP, BASE_CONFIGMAP_DATA
+from dagster_uc.configmaps import BASE_CONFIGMAP, BASE_CONFIGMAP_DATA
+from dagster_uc.log import logger
 
 
 class DagsterUserCodeHandler:
@@ -29,6 +29,28 @@ class DagsterUserCodeHandler:
     def __init__(self, config: UserCodeDeploymentsConfig, kr8s_api: kr8s.Api) -> None:
         self.config = config
         self.api = kr8s_api
+
+    def maybe_create_user_deployments_configmap(self) -> None:
+        """Creates a user deployments_configmap if it doesn't exist yet."""
+        from copy import deepcopy
+
+        dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
+        dagster_user_deployments_values_yaml_configmap["name"] = (
+            self.config.user_code_deployments_configmap_name
+        )
+        dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
+            BASE_CONFIGMAP_DATA,
+        )
+        try:
+            self._read_namespaced_config_map(
+                self.config.user_code_deployments_configmap_name,
+            )
+        except kr8s.NotFoundError:
+            ConfigMap(
+                resource=dagster_user_deployments_values_yaml_configmap,
+                namespace=self.config.namespace,
+                api=self.api,
+            ).create()  # type: ignore
 
     def remove_all_deployments(self) -> None:
         """This function removes in its entirety the values.yaml for dagster's user-code deployment chart from the k8s
@@ -89,10 +111,11 @@ class DagsterUserCodeHandler:
         configmap = self._read_namespaced_config_map(
             self.config.dagster_workspace_yaml_configmap_name,
         )
+
         last_applied_configuration = (
-            configmap["metadata"]["annotations"]["kubectl.kubernetes.io/last-applied-configuration"]
-            if "annotations" in configmap["metadata"]
-            else None
+            configmap["metadata"]
+            .get("annotations", {})
+            .get("kubectl.kubernetes.io/last-applied-configuration", None)
         )
 
         def generate_grpc_servers_yaml(servers: list[dict]) -> str:
@@ -233,6 +256,7 @@ class DagsterUserCodeHandler:
     def gen_new_deployment_yaml(
         self,
         name: str,
+        image_prefix: str | None,
         tag: str,
     ) -> dict:
         """This function generates yaml for a single user-code deployment, which is to be part of the 'deployments' array in the
@@ -243,7 +267,11 @@ class DagsterUserCodeHandler:
         deployment = {
             "name": name,
             "image": {
-                "repository": f"{self.config.acr}/{name}",
+                "repository": os.path.join(
+                    self.config.container_registry,
+                    image_prefix or "",
+                    name,
+                ),
                 "tag": tag,
                 "pullPolicy": "Always",
             },
@@ -357,9 +385,9 @@ class DagsterUserCodeHandler:
             self.config.user_code_deployments_configmap_name,
         )
         last_applied_configuration = (
-            configmap["metadata"]["annotations"]["kubectl.kubernetes.io/last-applied-configuration"]
-            if "annotations" in configmap["metadata"]
-            else None
+            configmap["metadata"]
+            .get("annotations", {})
+            .get("kubectl.kubernetes.io/last-applied-configuration", None)
         )
         current_deployments: list = yaml.safe_load(configmap["data"]["yaml"])["deployments"]
 
@@ -387,18 +415,15 @@ class DagsterUserCodeHandler:
 
         configmap.patch(new_configmap)  # type: ignore
 
-    def get_deployment_name(self, deployment_name_suffix: str) -> str:
+    def get_deployment_name(self, deployment_name_suffix: str | None = None) -> str:
         """Creates a deployment name based on the name of the git branch"""
         logger.debug("Determining deployment name...")
         if not self.config.cicd:
-            name = (
-                subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode()
-                + deployment_name_suffix
-            )
-            name = f"{name}"
-            name = re.sub("[^a-zA-Z0-9-]", "-", name)
-            name = name.strip("-")
-            return name
+            name = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode()
+            if deployment_name_suffix:
+                name += deployment_name_suffix
+
+            return re.sub("[^a-zA-Z0-9-]", "-", name).strip("-")
         else:
             return f"{self.config.environment}"
 
@@ -450,3 +475,61 @@ class DagsterUserCodeHandler:
                 ),
             ):
                 item.delete()  # type: ignore
+
+    def acquire_semaphore(self, reset_lock: bool = False) -> bool:
+        """Acquires a semaphore by creating a configmap"""
+        if reset_lock:
+            semaphore_list = cast(
+                list[APIObject],
+                self.api.get(
+                    ConfigMap,
+                    self.config.uc_deployment_semaphore_name,
+                    namespace=self.config.namespace,
+                ),
+            )
+            if len(semaphore_list):
+                semaphore_list[0].delete()  # type: ignore
+
+        semaphore_list = cast(
+            list[ConfigMap],
+            self.api.get(
+                ConfigMap,
+                self.config.uc_deployment_semaphore_name,
+                namespace=self.config.namespace,
+            ),
+        )
+        if len(semaphore_list):
+            semaphore = semaphore_list[0]
+            if semaphore.data.get("locked") == "true":
+                return False
+
+            semaphore.patch({"data": {"locked": "true"}})  # type: ignore
+            return True
+        else:
+            # Create semaphore if it does not exist
+            semaphore = ConfigMap(
+                {
+                    "metadata": {
+                        "name": self.config.uc_deployment_semaphore_name,
+                        "namespace": self.config.namespace,
+                    },
+                    "data": {"locked": "true"},
+                },
+            ).create()
+            return True
+
+    def release_semaphore(self) -> None:
+        """Releases the semaphore lock"""
+        try:
+            semaphore = cast(
+                list[ConfigMap],
+                self.api.get(
+                    ConfigMap,
+                    self.config.uc_deployment_semaphore_name,
+                    namespace=self.config.namespace,
+                ),
+            )[0]
+            semaphore.patch({"data": {"locked": "false"}})  # type: ignore
+            logger.debug("patched semaphore to locked: false")
+        except Exception as e:
+            logger.error(f"Failed to release deployment lock: {e}")

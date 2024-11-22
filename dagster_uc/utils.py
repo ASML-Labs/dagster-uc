@@ -1,17 +1,20 @@
 import os
+import re
 import subprocess
 import sys
 from enum import Enum
 from subprocess import Popen, TimeoutExpired
 
-from dagster_uc.initialize_logger import logger
+import typer
+
+from dagster_uc.log import logger
 
 
 class BuildTool(str, Enum):
     """The possible build tools to choose from"""
 
+    podman = "podman"
     docker = "docker"
-    buildah = "buildah"
     auto = "auto"
 
 
@@ -58,15 +61,21 @@ def run_cli_command(
     return res
 
 
-def gen_tag(deployment_name: str, acr: str, subscription: str, dagster_version: str) -> str:
+def gen_tag(
+    deployment_name: str,
+    container_registry: str,
+    dagster_version: str,
+    use_az_login: bool,
+) -> str:
     """Identifies the latest tag present in the ACR and increments it by one."""
-    import re
+    if use_az_login:
+        login_registry(container_registry)
 
     res = run_cli_command(
-        f"az acr repository show-tags --repository {deployment_name} -n {acr} --subscription {subscription}",
+        f"podman search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}}",
         ignore_failures=True,
         capture_output=True,
-        timeout=5,
+        timeout=15,
     )
     if isinstance(res, TimeoutExpired):
         if res.stderr is not None and "Please try running 'az login' again" in res.stderr.decode():
@@ -81,14 +90,16 @@ def gen_tag(deployment_name: str, acr: str, subscription: str, dagster_version: 
         return f"{dagster_version}-0"
     elif res.returncode > 0:
         raise Exception(res.stderr)
-    tag_list_string = res.stdout.decode("utf-8")
-    pattern = r'".*?-(\d+)"'
-    tags = re.findall(pattern, tag_list_string)
-    logger.debug(f"Found the following image tags for this branch in the acr: {tags}")
+
+    tags = re.findall(r".*?-(\d+)", res.stdout.decode("utf-8"))
+    logger.debug(
+        f"Found the following image tags for this branch in the container registry: {tags}",
+    )
+
     tags_ints = [int(tag) for tag in tags]
     if not len(tags_ints):
         return f"{dagster_version}-0"
-    new_tag = f"{dagster_version}-{str(max(tags_ints)+1)}"
+    new_tag = f"{dagster_version}-{max(tags_ints)+1}"
     return new_tag
 
 
@@ -98,3 +109,76 @@ def run_cli_command_streaming(cmd: str, as_user: str = "") -> None:
         cmd = f"sudo -u {as_user} {cmd}"
     logger.debug(f"[running command] {cmd}")
     Popen(cmd, stdout=sys.stdout, stderr=sys.stderr, env=os.environ.copy(), shell=True)
+
+
+def login_registry(image_registry: str) -> None:
+    """Logs into registry with az cli"""
+    typer.echo("Logging into acr...")
+    cmd = [
+        "az",
+        "acr",
+        "login",
+        "--name",
+        image_registry,
+        "--expose-token",
+        "--output",
+        "tsv",
+        "--query",
+        "accessToken",
+    ]
+    typer.echo(f"\033[1mExecuting\033[0m cmd: {' '.join(cmd)}")
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=False)
+    output, error = process.communicate()
+    token = output.decode().strip().encode("utf-8")
+
+    cmd = [
+        BuildTool.podman.value,
+        "login",
+        "--username",
+        "00000000-0000-0000-0000-000000000000",
+        "--password-stdin",
+        image_registry,
+    ]
+    exception_on_failed_subprocess(subprocess.run(cmd, input=token, capture_output=False))
+
+
+def build_and_push(
+    repository_root: str,
+    image_registry: str,
+    image_name: str,
+    dockerfile: str,
+    use_sudo: bool,
+    tag: str,
+    branch_name: str,
+    use_az_login: bool,
+):
+    """Build a docker image and push it to the registry"""
+    # We need to work from the root of the repo so docker can access all files
+    previous_dir = os.getcwd()
+    os.chdir(repository_root)
+
+    cmd = [
+        BuildTool.podman.value,
+        "build",
+        "-f",
+        os.path.join(repository_root, dockerfile),
+        "-t",
+        os.path.join(image_registry, f"{image_name}:{tag}"),
+        "--build-arg=BRANCH_NAME=" + branch_name,
+        ".",
+    ]
+
+    if use_sudo:
+        cmd = ["sudo"] + cmd
+
+    exception_on_failed_subprocess(subprocess.run(cmd, capture_output=False))
+
+    if use_az_login:
+        login_registry(image_registry=image_registry)
+
+    typer.echo("Pushing image...")
+    cmd = [BuildTool.podman.value, "push", os.path.join(image_registry, f"{image_name}:{tag}")]
+    if use_sudo:
+        cmd = ["sudo"] + cmd
+    exception_on_failed_subprocess(subprocess.run(cmd, capture_output=False))
+    os.chdir(previous_dir)
