@@ -35,7 +35,7 @@ class DagsterUserCodeHandler:
         from copy import deepcopy
 
         dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
-        dagster_user_deployments_values_yaml_configmap["name"] = (
+        dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
             self.config.user_code_deployments_configmap_name
         )
         dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
