@@ -161,7 +161,7 @@ def build_and_push(
         BuildTool.podman.value,
         "build",
         "-f",
-        os.path.join(repository_root, dockerfile),
+        os.path.join(os.getcwd(), dockerfile),
         "-t",
         os.path.join(image_registry, f"{image_name}:{tag}"),
         "--build-arg=BRANCH_NAME=" + branch_name,
