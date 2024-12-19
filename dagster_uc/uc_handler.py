@@ -17,6 +17,7 @@ from kr8s.objects import Role as Role
 from kr8s.objects import RoleBinding as RoleBinding
 from kr8s.objects import Service as Service
 from kr8s.objects import ServiceAccount as ServiceAccount
+from packaging.version import Version
 
 from dagster_uc.config import UserCodeDeploymentsConfig
 from dagster_uc.configmaps import BASE_CONFIGMAP, BASE_CONFIGMAP_DATA
@@ -430,10 +431,25 @@ class DagsterUserCodeHandler:
     def _ensure_dagster_version_match(self) -> None:
         """Raises an exception if the cluster version of dagster is different than the local version"""
         logger.debug("Going to read the cluster dagster version...")
-        local_dagster_version = self.config.dagster_version
-        cluster_dagster_version = self._read_namespaced_config_map("dagster-instance")["metadata"][
-            "labels"
-        ]["chart"].split("-")[1]
+        local_dagster_version = Version(self.config.dagster_version)
+
+        ## GETS cluster version from dagster deamon pod
+        deamon_pod = cast(
+            list[Pod],
+            self.api.get(Pod, label_selector="deployment=daemon", namespace=self.config.namespace),
+        )[0]
+
+        ex = deamon_pod.exec(command=["dagster", "--version"])
+        output = ex.stdout.decode("ascii") # type: ignore
+        cluster_dagster_version = re.findall("version (.*)", output)
+
+        if len(cluster_dagster_version) != 1:
+            raise Exception(
+                f"Failed parsing the cluster dagster version, exec response from container `{output}`"
+            )
+        else:
+            cluster_dagster_version = Version(cluster_dagster_version[0])
+
         logger.debug(f"Cluster dagster version detected to be '{cluster_dagster_version}'")
         if not cluster_dagster_version == local_dagster_version:
             raise Exception(
