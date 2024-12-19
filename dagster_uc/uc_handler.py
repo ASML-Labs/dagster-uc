@@ -440,12 +440,12 @@ class DagsterUserCodeHandler:
         )[0]
 
         ex = deamon_pod.exec(command=["dagster", "--version"])
-        output = ex.stdout.decode("ascii") # type: ignore
+        output = ex.stdout.decode("ascii")  # type: ignore
         cluster_dagster_version = re.findall("version (.*)", output)
 
         if len(cluster_dagster_version) != 1:
             raise Exception(
-                f"Failed parsing the cluster dagster version, exec response from container `{output}`"
+                f"Failed parsing the cluster dagster version, exec response from container `{output}`",
             )
         else:
             cluster_dagster_version = Version(cluster_dagster_version[0])
