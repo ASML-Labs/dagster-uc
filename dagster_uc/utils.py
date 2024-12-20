@@ -72,7 +72,7 @@ def gen_tag(
         login_registry(container_registry)
 
     res = run_cli_command(
-        f"podman search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}}",
+        f"podman search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}} --limit 9999999",
         ignore_failures=True,
         capture_output=True,
         timeout=15,
