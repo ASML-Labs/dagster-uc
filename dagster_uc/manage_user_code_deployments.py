@@ -12,8 +12,8 @@ from typing import Annotated, cast
 
 import kr8s
 import typer
-from kr8s._objects import APIObject
 from kr8s.objects import (
+    APIObject,
     ConfigMap,
     Pod,
 )
@@ -459,12 +459,14 @@ def deployment_deploy(
     timeout = 40 if not full_redeploy_done else 240
 
     while True:
-        code_pods = cast(
-            list[APIObject],
-            handler.api.get(
-                Pod,
-                label_selector=f"deployment={deployment_name}",
-                namespace=config.namespace,
+        code_pods = list(
+            cast(
+                list[APIObject],
+                handler.api.get(
+                    Pod,
+                    label_selector=f"deployment={deployment_name}",
+                    namespace=config.namespace,
+                ),
             ),
         )
         if len(code_pods) == 0:

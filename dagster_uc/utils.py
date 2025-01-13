@@ -99,7 +99,7 @@ def gen_tag(
     tags_ints = [int(tag) for tag in tags]
     if not len(tags_ints):
         return f"{dagster_version}-0"
-    new_tag = f"{dagster_version}-{max(tags_ints)+1}"
+    new_tag = f"{dagster_version}-{max(tags_ints) + 1}"
     return new_tag
 
 
