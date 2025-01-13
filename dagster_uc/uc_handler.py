@@ -434,9 +434,15 @@ class DagsterUserCodeHandler:
         local_dagster_version = Version(self.config.dagster_version)
 
         ## GETS cluster version from dagster deamon pod
-        deamon_pod = cast(
-            list[Pod],
-            self.api.get(Pod, label_selector="deployment=daemon", namespace=self.config.namespace),
+        deamon_pod = list(
+            cast(
+                list[Pod],
+                self.api.get(
+                    Pod,
+                    label_selector="deployment=daemon",
+                    namespace=self.config.namespace,
+                ),
+            ),
         )[0]
 
         ex = deamon_pod.exec(command=["dagster", "--version"])
@@ -458,12 +464,14 @@ class DagsterUserCodeHandler:
 
     def check_if_code_pod_exists(self, label: str) -> bool:
         """Checks if the code location pod of specific label is available"""
-        running_pods = cast(
-            list[APIObject],
-            self.api.get(
-                Pod,
-                label_selector=f"deployment={label}",
-                namespace=self.config.namespace,
+        running_pods = list(
+            cast(
+                list[APIObject],
+                self.api.get(
+                    Pod,
+                    label_selector=f"deployment={label}",
+                    namespace=self.config.namespace,
+                ),
             ),
         )
         return len(running_pods) > 0
@@ -495,23 +503,27 @@ class DagsterUserCodeHandler:
     def acquire_semaphore(self, reset_lock: bool = False) -> bool:
         """Acquires a semaphore by creating a configmap"""
         if reset_lock:
-            semaphore_list = cast(
-                list[APIObject],
-                self.api.get(
-                    ConfigMap,
-                    self.config.uc_deployment_semaphore_name,
-                    namespace=self.config.namespace,
+            semaphore_list = list(
+                cast(
+                    list[APIObject],
+                    self.api.get(
+                        ConfigMap,
+                        self.config.uc_deployment_semaphore_name,
+                        namespace=self.config.namespace,
+                    ),
                 ),
             )
             if len(semaphore_list):
                 semaphore_list[0].delete()  # type: ignore
 
-        semaphore_list = cast(
-            list[ConfigMap],
-            self.api.get(
-                ConfigMap,
-                self.config.uc_deployment_semaphore_name,
-                namespace=self.config.namespace,
+        semaphore_list = list(
+            cast(
+                list[ConfigMap],
+                self.api.get(
+                    ConfigMap,
+                    self.config.uc_deployment_semaphore_name,
+                    namespace=self.config.namespace,
+                ),
             ),
         )
         if len(semaphore_list):
@@ -537,12 +549,14 @@ class DagsterUserCodeHandler:
     def release_semaphore(self) -> None:
         """Releases the semaphore lock"""
         try:
-            semaphore = cast(
-                list[ConfigMap],
-                self.api.get(
-                    ConfigMap,
-                    self.config.uc_deployment_semaphore_name,
-                    namespace=self.config.namespace,
+            semaphore = list(
+                cast(
+                    list[ConfigMap],
+                    self.api.get(
+                        ConfigMap,
+                        self.config.uc_deployment_semaphore_name,
+                        namespace=self.config.namespace,
+                    ),
                 ),
             )[0]
             semaphore.patch({"data": {"locked": "false"}})  # type: ignore
