@@ -89,6 +89,7 @@ def default(
 
 def build_push_container(
     deployment_name: str,
+    branch_name: str,
     image_prefix: str | None,
     config: UserCodeDeploymentsConfig,
     use_sudo: bool,
@@ -105,7 +106,7 @@ def build_push_container(
         dockerfile=config.dockerfile,
         use_sudo=use_sudo,
         tag=tag,
-        branch_name=deployment_name,
+        branch_name=branch_name,
         use_az_login=config.use_az_login,
     )
 
@@ -274,7 +275,7 @@ def deployment_delete(
             name = handler.get_deployment_name(
                 deployment_name_suffix="",
                 use_project_name=config.use_project_name,
-            )
+            ).full_name
         else:
             # In case the UI name separator of the deployment is passed
             name = name.replace(":", "--")
@@ -308,7 +309,7 @@ def check_deployment(
 ) -> None:
     """This function executes before any other nested cli command is called and loads the configuration object."""
     if not name:
-        name = handler.get_deployment_name(use_project_name=config.use_project_name)
+        name = handler.get_deployment_name(use_project_name=config.use_project_name).full_name
     else:
         # In case the UI name separator of the deployment is passed
         name = name.replace(":", "--")
@@ -400,10 +401,18 @@ def deployment_deploy(
             raise Exception("Podman installation is required to run dagster-uc.")
 
         logger.debug("Using 'podman' to build image.")
-        deployment_name = deployment_name or handler.get_deployment_name(
-            deployment_name_suffix,
-            use_project_name=config.use_project_name,
-        )
+        if deployment_name:
+            (deployment_name, branch_name) = (deployment_name, deployment_name)
+        else:
+            dagster_deployment = handler.get_deployment_name(
+                deployment_name_suffix,
+                use_project_name=config.use_project_name,
+            )
+            (deployment_name, branch_name) = (
+                dagster_deployment.full_name,
+                dagster_deployment.branch_name,
+            )
+
         logger.debug("Determining tag...")
         new_tag = gen_tag(
             deployment_name
@@ -420,9 +429,10 @@ def deployment_deploy(
         if not skip_build:
             build_push_container(
                 deployment_name,
-                handler.config.image_prefix,
-                config,
-                use_sudo,
+                branch_name=branch_name,
+                image_prefix=handler.config.image_prefix,
+                config=config,
+                use_sudo=use_sudo,
                 tag=new_tag,
             )
 

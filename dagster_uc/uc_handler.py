@@ -3,7 +3,7 @@ import logging
 import re
 import subprocess
 from collections.abc import Callable
-from typing import cast
+from typing import NamedTuple, cast
 
 import kr8s
 import yaml
@@ -22,6 +22,13 @@ from packaging.version import Version
 from dagster_uc.config import UserCodeDeploymentsConfig
 from dagster_uc.configmaps import BASE_CONFIGMAP, BASE_CONFIGMAP_DATA
 from dagster_uc.log import logger
+
+
+class DagsterDeployment(NamedTuple):
+    """Dagster deployment names"""
+
+    full_name: str
+    branch_name: str
 
 
 class DagsterUserCodeHandler:
@@ -423,7 +430,7 @@ class DagsterUserCodeHandler:
         self,
         deployment_name_suffix: str | None = None,
         use_project_name: bool = True,
-    ) -> str:
+    ) -> DagsterDeployment:
         """Creates a deployment name based on the name of the pyproject.toml and name of git branch"""
         logger.debug("Determining deployment name...")
 
@@ -437,12 +444,12 @@ class DagsterUserCodeHandler:
             name = f"{project_name}--{branch}" if project_name is not None else branch
 
         else:
-            name = (
-                f"{project_name}--{self.config.environment}"
-                if project_name is not None
-                else self.config.environment
-            )
-        return name
+            branch = self.config.environment
+            name = f"{project_name}--{branch}" if project_name is not None else branch
+        return DagsterDeployment(
+            full_name=name,
+            branch_name=branch,
+        )
 
     def _ensure_dagster_version_match(self) -> None:
         """Raises an exception if the cluster version of dagster is different than the local version"""
