@@ -125,7 +125,10 @@ class DagsterUserCodeHandler:
                 grpc_server = {
                     "host": server["name"],
                     "port": 3030,
-                    "location_name": server["name"],
+                    "location_name": server["name"].replace(
+                        "--",
+                        ":",
+                    ),  ## We replace the -- separator with `:` for more friendly UI name
                 }
                 data["load_from"].append({"grpc_server": grpc_server})
             return yaml.dump(data)
@@ -416,17 +419,30 @@ class DagsterUserCodeHandler:
 
         configmap.patch(new_configmap)  # type: ignore
 
-    def get_deployment_name(self, deployment_name_suffix: str | None = None) -> str:
-        """Creates a deployment name based on the name of the git branch"""
+    def get_deployment_name(  # noqa: D102
+        self,
+        deployment_name_suffix: str | None = None,
+        use_project_name: bool = True,
+    ) -> str:
+        """Creates a deployment name based on the name of the pyproject.toml and name of git branch"""
         logger.debug("Determining deployment name...")
-        if not self.config.cicd:
-            name = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode()
-            if deployment_name_suffix:
-                name += deployment_name_suffix
 
-            return re.sub("[^a-zA-Z0-9-]", "-", name).strip("-")
+        project_name = self._get_project_name() if use_project_name else None
+
+        if not self.config.cicd:
+            branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode()
+            if deployment_name_suffix:
+                branch += deployment_name_suffix
+            branch = re.sub(r"[^a-zA-Z0-9]+", "-", branch).strip("-")  # Strips double --
+            name = f"{project_name}--{branch}" if project_name is not None else branch
+
         else:
-            return f"{self.config.environment}"
+            name = (
+                f"{project_name}--{self.config.environment}"
+                if project_name is not None
+                else self.config.environment
+            )
+        return name
 
     def _ensure_dagster_version_match(self) -> None:
         """Raises an exception if the cluster version of dagster is different than the local version"""
@@ -563,3 +579,16 @@ class DagsterUserCodeHandler:
             logger.debug("patched semaphore to locked: false")
         except Exception as e:
             logger.error(f"Failed to release deployment lock: {e}")
+
+    def _get_project_name(self) -> str | None:
+        import tomli
+
+        try:
+            with open("pyproject.toml", "rb") as fp:
+                data = tomli.load(fp)
+                return re.sub("[^a-zA-Z0-9-]", "-", data["project"]["name"]).strip("-")
+        except FileNotFoundError:
+            logger.warning("""
+            pyproject.toml not found, no project name will be used.
+            Make sure dagster-uc is called in the same directory as the project""")
+            return None

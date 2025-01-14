@@ -35,6 +35,7 @@ class UserCodeDeploymentsConfig:
     dagster_gui_url: str | None = None
     verbose: bool = False
     use_az_login: bool = True
+    use_project_name: bool = True
     user_code_deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
     dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"
