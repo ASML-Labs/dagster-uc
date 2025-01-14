@@ -325,6 +325,8 @@ def check_deployment(
         with contextlib.suppress(Exception):
             for line in pod.logs(pretty=True, follow=True, timeout=timeout):  # type: ignore
                 typer.echo(line)
+                if "started dagster code server" in line.lower():
+                    break
 
 
 @deployment_app.command(
