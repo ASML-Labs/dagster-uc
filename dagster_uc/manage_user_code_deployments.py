@@ -213,6 +213,9 @@ def deployment_revive(
     ],
     tag: Annotated[str, typer.Option("--tag", "-t", help="The tag of the deployment to revive.")],
 ):
+    # In case the UI name separator of the deployment is passed
+    name = name.replace(":", "--")
+
     if not handler._check_deployment_exists(
         name,
     ):
@@ -272,6 +275,9 @@ def deployment_delete(
                 deployment_name_suffix="",
                 use_project_name=config.use_project_name,
             )
+        else:
+            # In case the UI name separator of the deployment is passed
+            name = name.replace(":", "--")
         handler.remove_user_deployment_from_configmap(name)
         handler.delete_k8s_resources_for_user_deployment(
             name,
@@ -303,6 +309,9 @@ def check_deployment(
     """This function executes before any other nested cli command is called and loads the configuration object."""
     if not name:
         name = handler.get_deployment_name(use_project_name=config.use_project_name)
+    else:
+        # In case the UI name separator of the deployment is passed
+        name = name.replace(":", "--")
     if not handler._check_deployment_exists(name):
         logger.warning(
             f"Deployment with name '{name}' does not seem to exist in environment '{config.environment}'. Attempting to proceed with status check anyways.",
