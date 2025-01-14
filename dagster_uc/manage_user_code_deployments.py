@@ -167,6 +167,9 @@ def init_config(
         kubernetes_context=typer.prompt("Kubernetes context of the cluster to use for api calls"),
         dagster_gui_url=optional_prompt("URL of dagster UI"),
         use_az_login=typer.confirm("Whether to use az cli to login to container registry"),
+        use_project_name=typer.confirm(
+            "Whether to use the pyproject.toml project-name as deployment name prefix.",
+        ),
         user_code_deployments_configmap_name=typer.prompt(
             "Configmap name to use for user_code_deployments",
             default="dagster-user-deployments-values-yaml",
@@ -265,7 +268,10 @@ def deployment_delete(
         typer.echo("\033[1mDeleted all deployments\033[0m")
     else:
         if not name:
-            name = handler.get_deployment_name(deployment_name_suffix="")
+            name = handler.get_deployment_name(
+                deployment_name_suffix="",
+                use_project_name=config.use_project_name,
+            )
         handler.remove_user_deployment_from_configmap(name)
         handler.delete_k8s_resources_for_user_deployment(
             name,
@@ -296,7 +302,7 @@ def check_deployment(
 ) -> None:
     """This function executes before any other nested cli command is called and loads the configuration object."""
     if not name:
-        name = handler.get_deployment_name()
+        name = handler.get_deployment_name(use_project_name=config.use_project_name)
     if not handler._check_deployment_exists(name):
         logger.warning(
             f"Deployment with name '{name}' does not seem to exist in environment '{config.environment}'. Attempting to proceed with status check anyways.",
@@ -387,12 +393,13 @@ def deployment_deploy(
         logger.debug("Using 'podman' to build image.")
         deployment_name = deployment_name or handler.get_deployment_name(
             deployment_name_suffix,
+            use_project_name=config.use_project_name,
         )
         logger.debug("Determining tag...")
         new_tag = gen_tag(
             deployment_name
-            if not handler.config.image_prefix
-            else os.path.join(handler.config.image_prefix, deployment_name),
+            if not config.image_prefix
+            else os.path.join(config.image_prefix, deployment_name),
             config.container_registry,
             config.dagster_version,
             config.use_az_login,
@@ -453,7 +460,7 @@ def deployment_deploy(
         handler.release_semaphore()
     if config.dagster_gui_url:
         typer.echo(
-            f"Your assets: {config.dagster_gui_url.rstrip('/')}/locations/{deployment_name}/assets\033[0m",
+            f"Your assets: {config.dagster_gui_url.rstrip('/')}/locations/{deployment_name.replace('--', ':')}/assets\033[0m",
         )
     time.sleep(5)
     timeout = 40 if not full_redeploy_done else 240
