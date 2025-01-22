@@ -25,9 +25,9 @@ jobs:
         with:
           python-version: "3.10"
       - name: Install pypa/build
-        run: make .venv && VIRTUAL_ENV=./.venv
+        run: pip install rust-just && just ci-setup
       - name: CI-check
-        run: source .venv/bin/activate && make ci-check
+        run: just ci-check
 
   tests:
     name: Tests
@@ -40,9 +40,9 @@ jobs:
         with:
           python-version: "3.10"
       - name: Install pypa/build
-        run: make .venv && VIRTUAL_ENV=./.venv
+        run: pip install rust-just && just ci-setup
       - name: Execute tests
-        run: source .venv/bin/activate && pytest .
+        run: uv run pytest .
 
   build:
     name: Build wheels
@@ -57,9 +57,9 @@ jobs:
         with:
           python-version: "3.10"
       - name: Install pypa/build
-        run: make .venv && VIRTUAL_ENV=./.venv
+        run: pip install rust-just && just ci-setup
       - name: Build a binary wheel
-        run: source .venv/bin/activate && python3 -m build -w "."
+        run: uv build .
       - name: Store the distribution packages
         uses: actions/upload-artifact@v3
         with:
