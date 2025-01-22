@@ -25,6 +25,15 @@ dependencies = [
     "pytz"
 ]
 
+[tool.uv]
+dev-dependencies = [
+    "ruff",
+    "pyright",
+    "pytest",
+    "pip",
+    "build"
+]
+
 [project.urls]
 Homepage = "https://github.com/ASML-Labs/dagster-uc"
 Issues = "https://github.com/ASML-Labs/dagster-uc/issues"
