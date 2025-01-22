@@ -74,7 +74,7 @@ class DagsterUserCodeHandler:
         configmap = self._read_namespaced_config_map(
             self.config.user_code_deployments_configmap_name,
         )
-        configmap.patch(dagster_user_deployments_values_yaml_configmap)  # type: ignore
+        configmap.patch(dagster_user_deployments_values_yaml_configmap)
 
     def list_deployments(
         self,
@@ -240,7 +240,7 @@ class DagsterUserCodeHandler:
             namespace=self.config.namespace,
         ):
             logger.info(f"Deleting pod {pod.name}")
-            pod.delete()  # type: ignore
+            pod.delete()
 
         if delete_deployments:
             import contextlib
@@ -499,7 +499,7 @@ class DagsterUserCodeHandler:
                 namespace=self.config.namespace,
                 label_selector=label_selector,
             ):
-                item.delete()  # type: ignore
+                item.delete()
 
     def acquire_semaphore(self, reset_lock: bool = False) -> bool:
         """Acquires a semaphore by creating a configmap"""

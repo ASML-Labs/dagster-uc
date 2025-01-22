@@ -8,7 +8,7 @@ import pprint
 import subprocess
 import time
 from dataclasses import asdict
-from typing import Annotated
+from typing import Annotated, cast
 
 import kr8s
 import typer
@@ -317,6 +317,7 @@ def check_deployment(
         label_selector=f"deployment={name}",
         namespace=config.namespace,
     ):
+        pod = cast(Pod, pod)
         with contextlib.suppress(Exception):
             for line in pod.logs(pretty=True, follow=True, timeout=timeout):  # type: ignore
                 typer.echo(line)
