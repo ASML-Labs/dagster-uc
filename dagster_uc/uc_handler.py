@@ -3,11 +3,10 @@ import logging
 import re
 import subprocess
 from collections.abc import Callable
-from typing import NamedTuple, cast
+from typing import NamedTuple
 
 import kr8s
 import yaml
-from kr8s._objects import APIObject
 from kr8s.objects import (
     ConfigMap,
     Deployment,
@@ -58,7 +57,7 @@ class DagsterUserCodeHandler:
                 resource=dagster_user_deployments_values_yaml_configmap,
                 namespace=self.config.namespace,
                 api=self.api,
-            ).create()  # type: ignore
+            ).create()
 
     def remove_all_deployments(self) -> None:
         """This function removes in its entirety the values.yaml for dagster's user-code deployment chart from the k8s
@@ -210,10 +209,7 @@ class DagsterUserCodeHandler:
 
         if reload_dagster:
             for deployment_name in ["dagster-daemon", "dagster-dagster-webserver"]:
-                deployment = cast(
-                    APIObject,
-                    Deployment.get(deployment_name, namespace=self.config.namespace),
-                )
+                deployment = Deployment.get(deployment_name, namespace=self.config.namespace)
                 reload_patch = {
                     "spec": {
                         "template": {
@@ -227,7 +223,7 @@ class DagsterUserCodeHandler:
                         },
                     },
                 }
-                deployment.patch(reload_patch)  # type: ignore
+                deployment.patch(reload_patch)
 
     def delete_k8s_resources_for_user_deployment(
         self,
@@ -237,14 +233,11 @@ class DagsterUserCodeHandler:
         """Deletes all k8s resources related to a specific user code deployment.
         Returns a boolean letting you know if pod was found
         """
-        for pod in cast(
-            list[APIObject],
-            self.api.get(
-                Pod,
-                label_selector=f"dagster/code-location={label}",
-                field_selector="status.phase=Succeeded",
-                namespace=self.config.namespace,
-            ),
+        for pod in self.api.get(
+            Pod,
+            label_selector=f"dagster/code-location={label}",
+            field_selector="status.phase=Succeeded",
+            namespace=self.config.namespace,
         ):
             logger.info(f"Deleting pod {pod.name}")
             pod.delete()  # type: ignore
@@ -257,12 +250,12 @@ class DagsterUserCodeHandler:
                     namespace=self.config.namespace,
                     label_selector=f"deployment={label}",
                     api=self.api,
-                ).delete()  # type: ignore
+                ).delete()
                 Deployment.get(
                     namespace=self.config.namespace,
                     label_selector=f"dagster/code-location={label}",
                     api=self.api,
-                ).delete()  # type: ignore
+                ).delete()
 
     def gen_new_deployment_yaml(
         self,
@@ -330,12 +323,9 @@ class DagsterUserCodeHandler:
     def _read_namespaced_config_map(
         self,
         name: str,
-    ) -> APIObject:
+    ) -> ConfigMap:
         """Read a configmap that exists on the k8s cluster"""
-        configmap = cast(
-            APIObject,
-            ConfigMap.get(name=name, namespace=self.config.namespace, api=self.api),
-        )
+        configmap = ConfigMap.get(name=name, namespace=self.config.namespace, api=self.api)
         return configmap
 
     def add_user_deployment_to_configmap(
@@ -423,8 +413,7 @@ class DagsterUserCodeHandler:
                 "kubectl.kubernetes.io/last-applied-configuration": last_applied_configuration,
             },
         }
-
-        configmap.patch(new_configmap)  # type: ignore
+        configmap.patch(new_configmap)
 
     def get_deployment_name(  # noqa: D102
         self,
@@ -457,16 +446,11 @@ class DagsterUserCodeHandler:
         local_dagster_version = Version(self.config.dagster_version)
 
         ## GETS cluster version from dagster deamon pod
-        deamon_pod = list(
-            cast(
-                list[Pod],
-                self.api.get(
-                    Pod,
-                    label_selector="deployment=daemon",
-                    namespace=self.config.namespace,
-                ),
-            ),
-        )[0]
+        deamon_pod = Pod.get(
+            label_selector="deployment=daemon",
+            namespace=self.config.namespace,
+            api=self.api,
+        )
 
         ex = deamon_pod.exec(command=["dagster", "--version"])
         output = ex.stdout.decode("ascii")  # type: ignore
@@ -488,13 +472,10 @@ class DagsterUserCodeHandler:
     def check_if_code_pod_exists(self, label: str) -> bool:
         """Checks if the code location pod of specific label is available"""
         running_pods = list(
-            cast(
-                list[APIObject],
-                self.api.get(
-                    Pod,
-                    label_selector=f"deployment={label}",
-                    namespace=self.config.namespace,
-                ),
+            self.api.get(
+                Pod,
+                label_selector=f"deployment={label}",
+                namespace=self.config.namespace,
             ),
         )
         return len(running_pods) > 0
@@ -513,50 +494,38 @@ class DagsterUserCodeHandler:
             "CronJob",
             "Job",
         ]:
-            for item in cast(
-                list[APIObject],
-                self.api.get(
-                    resource,
-                    namespace=self.config.namespace,
-                    label_selector=label_selector,
-                ),
+            for item in self.api.get(
+                resource,
+                namespace=self.config.namespace,
+                label_selector=label_selector,
             ):
                 item.delete()  # type: ignore
 
     def acquire_semaphore(self, reset_lock: bool = False) -> bool:
         """Acquires a semaphore by creating a configmap"""
         if reset_lock:
-            semaphore_list = list(
-                cast(
-                    list[APIObject],
-                    self.api.get(
-                        ConfigMap,
-                        self.config.uc_deployment_semaphore_name,
-                        namespace=self.config.namespace,
-                    ),
-                ),
-            )
-            if len(semaphore_list):
-                semaphore_list[0].delete()  # type: ignore
-
-        semaphore_list = list(
-            cast(
-                list[ConfigMap],
-                self.api.get(
-                    ConfigMap,
+            try:
+                semaphore = ConfigMap.get(
                     self.config.uc_deployment_semaphore_name,
                     namespace=self.config.namespace,
-                ),
-            ),
-        )
-        if len(semaphore_list):
-            semaphore = semaphore_list[0]
+                    api=self.api,
+                )
+                semaphore.delete()
+            except kr8s.NotFoundError:
+                pass
+
+        try:
+            semaphore = ConfigMap.get(
+                self.config.uc_deployment_semaphore_name,
+                namespace=self.config.namespace,
+                api=self.api,
+            )
             if semaphore.data.get("locked") == "true":
                 return False
-
-            semaphore.patch({"data": {"locked": "true"}})  # type: ignore
-            return True
-        else:
+            else:
+                semaphore.patch({"data": {"locked": "true"}})
+                return True
+        except kr8s.NotFoundError:
             # Create semaphore if it does not exist
             semaphore = ConfigMap(
                 {
@@ -566,23 +535,19 @@ class DagsterUserCodeHandler:
                     },
                     "data": {"locked": "true"},
                 },
+                api=self.api,
             ).create()
             return True
 
     def release_semaphore(self) -> None:
         """Releases the semaphore lock"""
         try:
-            semaphore = list(
-                cast(
-                    list[ConfigMap],
-                    self.api.get(
-                        ConfigMap,
-                        self.config.uc_deployment_semaphore_name,
-                        namespace=self.config.namespace,
-                    ),
-                ),
-            )[0]
-            semaphore.patch({"data": {"locked": "false"}})  # type: ignore
+            semaphore = ConfigMap.get(
+                self.config.uc_deployment_semaphore_name,
+                namespace=self.config.namespace,
+                api=self.api,
+            )
+            semaphore.patch({"data": {"locked": "false"}})
             logger.debug("patched semaphore to locked: false")
         except Exception as e:
             logger.error(f"Failed to release deployment lock: {e}")

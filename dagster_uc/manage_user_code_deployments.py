@@ -8,12 +8,11 @@ import pprint
 import subprocess
 import time
 from dataclasses import asdict
-from typing import Annotated, cast
+from typing import Annotated
 
 import kr8s
 import typer
 from kr8s.objects import (
-    APIObject,
     ConfigMap,
     Pod,
 )
@@ -32,12 +31,12 @@ deployment_app = typer.Typer(
 app.add_typer(deployment_app)
 deployment_delete_app = typer.Typer(
     name="delete",
-    help="Contains subcommands for deleting one or more user code deployments from the cluster",
+    help="Delete one or more user code deployments",
 )
 deployment_app.add_typer(deployment_delete_app)
 deployment_check_app = typer.Typer(
     name="check",
-    help="Contains subcommands for checking the status of a deployment",
+    help="Check status of the user code deployment",
 )
 deployment_app.add_typer(deployment_check_app)
 
@@ -77,10 +76,8 @@ def default(
         if verbose:
             config.verbose = True
         logger.debug(f"Switching kubernetes context to {config.environment}...")
-        kr8s_api = cast(
-            kr8s.Api,
-            kr8s.api(context=f"{config.kubernetes_context}", namespace=config.namespace),
-        )
+        kr8s_api = kr8s.api(context=f"{config.kubernetes_context}", namespace=config.namespace)
+
         handler = DagsterUserCodeHandler(config, kr8s_api)
         handler._ensure_dagster_version_match()
         handler.maybe_create_user_deployments_configmap()
@@ -191,7 +188,7 @@ def init_config(
 
 @deployment_app.command(
     name="list",
-    help="List user code deployments that are currently active on the cluster",
+    help="List user code deployments that are currently active",
 )
 def deployment_list():
     """Outputs a list of currently active deployments"""
@@ -205,7 +202,7 @@ def deployment_list():
 
 @deployment_app.command(
     name="revive",
-    help="Redeploy an old user-code deployment, without rebuilding and uploading a docker image but instead using the latest existing image from the acr.",
+    help="Redeploy an old user code deployment using the latest existing image from the container registry",
 )
 def deployment_revive(
     name: Annotated[
@@ -258,13 +255,10 @@ def deployment_delete(
             label_selector="app.kubernetes.io/name=dagster-user-deployments",
         )
         handler.delete_k8s_resources(label_selector="app=dagster-user-deployments")
-        for item in cast(
-            list[APIObject],
-            handler.api.get(
-                ConfigMap,
-                namespace=config.namespace,
-                label_selector="app=dagster-user-deployments",
-            ),
+        for item in handler.api.get(
+            ConfigMap,
+            namespace=config.namespace,
+            label_selector="app=dagster-user-deployments",
         ):
             item.delete()  # type: ignore
         handler.delete_k8s_resources(label_selector="dagster/code-location")
@@ -318,9 +312,10 @@ def check_deployment(
             f"Deployment with name '{name}' does not seem to exist in environment '{config.environment}'. Attempting to proceed with status check anyways.",
         )
     typer.echo(f"\033[1mStatus for deployment {name}\033[0m")
-    for pod in cast(
-        list[Pod],
-        handler.api.get(Pod, label_selector=f"deployment={name}", namespace=config.namespace),
+    for pod in handler.api.get(
+        Pod,
+        label_selector=f"deployment={name}",
+        namespace=config.namespace,
     ):
         with contextlib.suppress(Exception):
             for line in pod.logs(pretty=True, follow=True, timeout=timeout):  # type: ignore
@@ -331,8 +326,7 @@ def check_deployment(
 
 @deployment_app.command(
     name="deploy",
-    help="Deploys the currently checked out git branch to the cluster as a user code deployment",
-    short_help="hello",
+    help="Deploys the currently checked out git branch as a user code deployment",
 )
 def deployment_deploy(
     force: Annotated[
@@ -488,13 +482,10 @@ def deployment_deploy(
 
     while True:
         code_pods = list(
-            cast(
-                list[APIObject],
-                handler.api.get(
-                    Pod,
-                    label_selector=f"deployment={deployment_name}",
-                    namespace=config.namespace,
-                ),
+            handler.api.get(
+                Pod,
+                label_selector=f"deployment={deployment_name}",
+                namespace=config.namespace,
             ),
         )
         if len(code_pods) == 0:

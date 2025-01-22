@@ -1,6 +1,6 @@
 [project]
 name = "dagster-uc"
-version = "0.3.1"
+version = "0.3.2"
 authors = [
     {name = "Stefan Verbruggen"}, 
     {name = "Ion Koutsouris"},
@@ -17,7 +17,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13"
 ]
 dependencies = [
-    "kr8s < 1.0",
+    "kr8s>=0.20,<1.0",
     "pyhelm3==0.3.3",
     "typer==0.12.3",
     "tomli",
