@@ -431,10 +431,10 @@ class DagsterUserCodeHandler:
                 branch += deployment_name_suffix
             branch = re.sub(r"[^a-zA-Z0-9]+", "-", branch).strip("-")  # Strips double --
             name = f"{project_name}--{branch}" if project_name is not None else branch
-
         else:
             branch = self.config.environment
             name = f"{project_name}--{branch}" if project_name is not None else branch
+
         return DagsterDeployment(
             full_name=name,
             branch_name=branch,
