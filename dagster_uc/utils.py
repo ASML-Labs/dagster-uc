@@ -67,7 +67,7 @@ def gen_tag(
     dagster_version: str,
     use_az_login: bool,
 ) -> str:
-    """Identifies the latest tag present in the ACR and increments it by one."""
+    """Identifies the latest tag present in the Containr registry and increments it by one."""
     if use_az_login:
         login_registry(container_registry)
 
@@ -91,13 +91,13 @@ def gen_tag(
     elif res.returncode > 0:
         raise Exception(res.stderr)
 
-    tags = re.findall(r".*?-(\d+)", res.stdout.decode("utf-8"))
+    tags = re.findall(rf"{dagster_version}-(\d+)", res.stdout.decode("utf-8"))
     logger.debug(
         f"Found the following image tags for this branch in the container registry: {tags}",
     )
 
     tags_ints = [int(tag) for tag in tags]
-    if not len(tags_ints):
+    if len(tags_ints) == 0:
         return f"{dagster_version}-0"
     new_tag = f"{dagster_version}-{max(tags_ints) + 1}"
     return new_tag
