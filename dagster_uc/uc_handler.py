@@ -277,7 +277,7 @@ class DagsterUserCodeHandler:
                     name,
                 ),
                 "tag": tag,
-                "pullPolicy": "Always",
+                "pullPolicy": "IfNotPresent",  # Safe, due to versioning of each deployment image
             },
             "dagsterApiGrpcArgs": [
                 "-f",
