@@ -105,6 +105,7 @@ def build_push_container(
         tag=tag,
         branch_name=branch_name,
         use_az_login=config.use_az_login,
+        build_envs=config.docker_env_vars if config.docker_env_vars is not None else [],
     )
 
 
@@ -145,6 +146,7 @@ def init_config(
         dagster_version=typer.prompt(
             "Version of dagster in project (should mirror dagster depoyment!)",
         ),
+        docker_env_vars=[],
         user_code_deployment_env_secrets=[],
         user_code_deployment_env=[],
         cicd=typer.confirm(

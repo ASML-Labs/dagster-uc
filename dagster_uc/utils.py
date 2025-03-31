@@ -151,6 +151,7 @@ def build_and_push(
     tag: str,
     branch_name: str,
     use_az_login: bool,
+    build_envs: list[str],
 ):
     """Build a docker image and push it to the registry"""
     # We need to work from the root of the repo so docker can access all files
@@ -167,6 +168,9 @@ def build_and_push(
         "--build-arg=BRANCH_NAME=" + branch_name,
         ".",
     ]
+
+    for env_var in build_envs:
+        cmd.extend(["--env", env_var])
 
     if use_sudo:
         cmd = ["sudo"] + cmd
