@@ -26,6 +26,9 @@ dev:
   dagster_version: 1.8.4
   docker_root: .
   dockerfile: ./Dockerfile
+  docker_env_vars:
+    - "VAR=SECRET"
+    - "RANDOM_VAR_IN_CURRENT_ENV"
   environment: dev
   kubernetes_context: "my-kubernetes-context"
   namespace: dagster-dev

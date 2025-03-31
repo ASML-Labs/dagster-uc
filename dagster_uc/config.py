@@ -32,6 +32,7 @@ class UserCodeDeploymentsConfig:
     limits: dict[str, str]
     requests: dict[str, str]
     kubernetes_context: str
+    docker_env_vars: list[str]
     dagster_gui_url: str | None = None
     verbose: bool = False
     use_az_login: bool = True
