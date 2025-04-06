@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import NamedTuple
 
 import kr8s
+import pyhelm3
 import yaml
 from kr8s.objects import (
     ConfigMap,
@@ -39,20 +40,21 @@ class DagsterUserCodeHandler:
 
     def maybe_create_user_deployments_configmap(self) -> None:
         """Creates a user deployments_configmap if it doesn't exist yet."""
-        from copy import deepcopy
-
-        dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
-        dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
-            self.config.user_code_deployments_configmap_name
-        )
-        dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
-            BASE_CONFIGMAP_DATA,
-        )
         try:
             self._read_namespaced_config_map(
                 self.config.user_code_deployments_configmap_name,
             )
         except kr8s.NotFoundError:
+            from copy import deepcopy
+
+            dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
+            dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
+                self.config.user_code_deployments_configmap_name
+            )
+            dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
+                BASE_CONFIGMAP_DATA,
+            )
+
             ConfigMap(
                 resource=dagster_user_deployments_values_yaml_configmap,
                 namespace=self.config.namespace,
@@ -180,7 +182,9 @@ class DagsterUserCodeHandler:
         self.update_dagster_workspace_yaml()
 
         loop = asyncio.new_event_loop()
-        helm_client = Client()
+        RELEASE_NAME = "dagster-user-code"  # noqa
+        helm_client = Client(kubecontext=self.config.kubernetes_context)
+
         chart = loop.run_until_complete(
             helm_client.get_chart(
                 chart_ref="dagster-user-deployments",
@@ -188,28 +192,33 @@ class DagsterUserCodeHandler:
                 version=self.config.dagster_version,
             ),
         )
-        helm_templates = [
-            *loop.run_until_complete(
-                helm_client.template_resources(
-                    chart,
-                    "dagster",
-                    values_dict,
-                    namespace=self.config.namespace,
-                ),
+        logger.info(
+            "Upgrading helm release '%s'...",
+            RELEASE_NAME,
+        )
+        installed = loop.run_until_complete(
+            helm_client.install_or_upgrade_release(
+                RELEASE_NAME,
+                chart,
+                values_dict,
+                namespace=self.config.namespace,
+                wait=True,
             ),
-        ]
+        )
+        if installed.status == pyhelm3.ReleaseRevisionStatus.FAILED:
+            logger.error(
+                "Dagster-usercode helm release install or upgrade failed, rolling back now..",
+            )
+            from pyhelm3 import Release
 
-        # Update user code deployments in k8s (akin to kubectl apply -f)
-        for obj in helm_templates:
-            k8s_obj = eval(obj["kind"])(obj, api=self.api)
-            try:
-                k8s_obj.patch(obj)
-            except kr8s.NotFoundError:
-                k8s_obj.create()
+            release = Release(name=RELEASE_NAME, namespace=self.config.namespace)
+            loop.run_until_complete(release.rollback())
+            raise Exception("Helm user-code deployment failed, had to rollback.")
 
         if reload_dagster:
             for deployment_name in ["dagster-daemon", "dagster-dagster-webserver"]:
                 deployment = Deployment.get(deployment_name, namespace=self.config.namespace)
+
                 reload_patch = {
                     "spec": {
                         "template": {
@@ -224,38 +233,6 @@ class DagsterUserCodeHandler:
                     },
                 }
                 deployment.patch(reload_patch)
-
-    def delete_k8s_resources_for_user_deployment(
-        self,
-        label: str,
-        delete_deployments: bool = True,
-    ) -> None:
-        """Deletes all k8s resources related to a specific user code deployment.
-        Returns a boolean letting you know if pod was found
-        """
-        for pod in self.api.get(
-            Pod,
-            label_selector=f"dagster/code-location={label}",
-            field_selector="status.phase=Succeeded",
-            namespace=self.config.namespace,
-        ):
-            logger.info(f"Deleting pod {pod.name}")
-            pod.delete()
-
-        if delete_deployments:
-            import contextlib
-
-            with contextlib.suppress(kr8s.NotFoundError):
-                Deployment.get(
-                    namespace=self.config.namespace,
-                    label_selector=f"deployment={label}",
-                    api=self.api,
-                ).delete()
-                Deployment.get(
-                    namespace=self.config.namespace,
-                    label_selector=f"dagster/code-location={label}",
-                    api=self.api,
-                ).delete()
 
     def gen_new_deployment_yaml(
         self,
@@ -479,27 +456,6 @@ class DagsterUserCodeHandler:
             ),
         )
         return len(running_pods) > 0
-
-    def delete_k8s_resources(self, label_selector: str):
-        """Delete all k8s resources with a specified label_selector"""
-        for resource in [
-            "Pod",
-            "ReplicationController",
-            "Service",
-            "DaemonSet",
-            "Deployment",
-            "ReplicaSet",
-            "StatefulSet",
-            "HorizontalPodAutoscaler",
-            "CronJob",
-            "Job",
-        ]:
-            for item in self.api.get(
-                resource,
-                namespace=self.config.namespace,
-                label_selector=label_selector,
-            ):
-                item.delete()
 
     def acquire_semaphore(self, reset_lock: bool = False) -> bool:
         """Acquires a semaphore by creating a configmap"""
