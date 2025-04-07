@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import pprint
-import subprocess
 import time
 from dataclasses import asdict
 from typing import Annotated, cast
@@ -13,14 +12,13 @@ from typing import Annotated, cast
 import kr8s
 import typer
 from kr8s.objects import (
-    ConfigMap,
     Pod,
 )
 
 from dagster_uc.config import UserCodeDeploymentsConfig, load_config
 from dagster_uc.log import logger
 from dagster_uc.uc_handler import DagsterUserCodeHandler
-from dagster_uc.utils import BuildTool, build_and_push, gen_tag
+from dagster_uc.utils import BuildTool, build_and_push, gen_tag, is_command_available
 
 app = typer.Typer(invoke_without_command=True)
 deployment_app = typer.Typer(
@@ -79,7 +77,6 @@ def default(
         kr8s_api = kr8s.api(context=f"{config.kubernetes_context}", namespace=config.namespace)
 
         handler = DagsterUserCodeHandler(config, kr8s_api)
-        handler._ensure_dagster_version_match()
         handler.maybe_create_user_deployments_configmap()
         logger.debug(f"Done: Switched kubernetes context to {config.environment}")
 
@@ -253,18 +250,7 @@ def deployment_delete(
 ) -> None:
     if delete_all:
         handler.remove_all_deployments()
-        handler.delete_k8s_resources(
-            label_selector="app.kubernetes.io/name=dagster-user-deployments",
-        )
-        handler.delete_k8s_resources(label_selector="app=dagster-user-deployments")
-        for item in handler.api.get(
-            ConfigMap,
-            namespace=config.namespace,
-            label_selector="app=dagster-user-deployments",
-        ):
-            item.delete()  # type: ignore
-        handler.delete_k8s_resources(label_selector="dagster/code-location")
-        handler.deploy_to_k8s()
+        handler.deploy_to_k8s(reload_dagster=True)
         typer.echo("\033[1mDeleted all deployments\033[0m")
     else:
         if not name:
@@ -276,10 +262,6 @@ def deployment_delete(
             # In case the UI name separator of the deployment is passed
             name = name.replace(":", "--")
         handler.remove_user_deployment_from_configmap(name)
-        handler.delete_k8s_resources_for_user_deployment(
-            name,
-            delete_deployments=True,
-        )
         handler.deploy_to_k8s(reload_dagster=True)
         typer.echo(f"Deleted deployment \033[1m{name}\033[0m")
 
@@ -373,18 +355,7 @@ def deployment_deploy(
         ),
     ] = False,
 ):
-    def is_command_available(command: str) -> bool:
-        try:
-            subprocess.run(
-                [command, "--version"],
-                capture_output=True,
-                check=True,  # ruff: ignore
-            )
-            return True
-        except subprocess.CalledProcessError:
-            return False
-        except FileNotFoundError:
-            return False
+    handler._ensure_dagster_version_match()
 
     count = 0
     while not handler.acquire_semaphore(reset_lock):
@@ -451,6 +422,7 @@ def deployment_deploy(
             logger.info(
                 f"Deployment with name '{deployment_name}' exists in '{config.environment}'. Updating deployment in configmap",
             )
+            # TODO(ion): make this into a single operation (replace)
             handler.remove_user_deployment_from_configmap(deployment_name)
             handler.add_user_deployment_to_configmap(
                 handler.gen_new_deployment_yaml(
@@ -460,19 +432,16 @@ def deployment_deploy(
                 ),
             )
             if config.cicd or force:
-                handler.delete_k8s_resources_for_user_deployment(deployment_name)
                 handler.deploy_to_k8s()
             elif not handler.check_if_code_pod_exists(label=deployment_name):
                 logger.info(
                     "Code deployment present in configmap but pod not found, triggering full deploy...",
                 )
-                handler.delete_k8s_resources_for_user_deployment(deployment_name, True)
                 handler.deploy_to_k8s()  # Something went wrong - redeploy yamls and reload webserver
             else:
                 logger.info(
                     "Code deployment present in configmap and pod found...",
                 )
-                handler.delete_k8s_resources_for_user_deployment(deployment_name, False)
                 handler.deploy_to_k8s(reload_dagster=False)
     finally:
         handler.release_semaphore()

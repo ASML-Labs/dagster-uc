@@ -186,3 +186,18 @@ def build_and_push(
         cmd = ["sudo"] + cmd
     exception_on_failed_subprocess(subprocess.run(cmd, capture_output=False))
     os.chdir(previous_dir)
+
+
+def is_command_available(command: str) -> bool:
+    """Checks if command is available."""
+    try:
+        subprocess.run(
+            [command, "--version"],
+            capture_output=True,
+            check=True,  # ruff: ignore
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+    except FileNotFoundError:
+        return False
