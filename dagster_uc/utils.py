@@ -67,7 +67,7 @@ def gen_tag(
     dagster_version: str,
     use_az_login: bool,
 ) -> str:
-    """Identifies the latest tag present in the Containr registry and increments it by one."""
+    """Identifies the latest tag present in the container registry and increments it by one."""
     if use_az_login:
         login_registry(container_registry)
 
