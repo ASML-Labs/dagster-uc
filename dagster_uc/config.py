@@ -37,6 +37,8 @@ class UserCodeDeploymentsConfig:
     verbose: bool = False
     use_az_login: bool = True
     use_project_name: bool = True
+    use_latest_chart_version: bool = False
+    container_registry_chart_path: str | None = None
     user_code_deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
     dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"

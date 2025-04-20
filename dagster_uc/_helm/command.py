@@ -30,7 +30,7 @@ class SafeLoader(yaml.SafeLoader):
     """
 
     @staticmethod
-    def construct_value(loader, node):
+    def construct_value(loader, node):  # noqa
         return loader.construct_scalar(node)
 
 

@@ -65,7 +65,7 @@ ReleaseType = TypeVar("ReleaseType", bound="Release")
 
 
 #: Type annotation for validating a string using a Pydantic type
-def validate_str_as(validate_type):
+def validate_str_as(validate_type: type):  # noqa
     adapter = TypeAdapter(validate_type)
     return lambda v: str(adapter.validate_python(v))
 
@@ -73,6 +73,7 @@ def validate_str_as(validate_type):
 #: Annotated string types for URLs
 AnyUrl = Annotated[str, AfterValidator(validate_str_as(PydanticAnyUrl))]
 HttpUrl = Annotated[str, AfterValidator(validate_str_as(PydanticHttpUrl))]
+OCIPath = Annotated[str, Field(pattern=r"oci:\/\/*")]
 
 
 class ChartDependency(BaseModel):
@@ -200,12 +201,12 @@ class ChartMetadata(BaseModel):
 class Chart(ModelWithCommand):
     """Model for a reference to a chart."""
 
-    ref: DirectoryPath | FilePath | HttpUrl | Name = Field(
+    ref: DirectoryPath | FilePath | HttpUrl | Name | OCIPath = Field(
         ...,
         description=(
             "The chart reference. "
             "Can be a chart directory or a packaged chart archive on the local "
-            "filesystem, the URL of a packaged chart or the name of a chart. "
+            "filesystem, the URL of a packaged chart or the name of a chart, or a oci registry. "
             "When a name is given, repo must also be given and version may optionally "
             "be given."
         ),
