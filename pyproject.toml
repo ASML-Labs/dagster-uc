@@ -40,14 +40,12 @@ Homepage = "https://github.com/ASML-Labs/dagster-uc"
 Issues = "https://github.com/ASML-Labs/dagster-uc/issues"
 
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project.scripts]
 dagster-uc = "dagster_uc.manage_user_code_deployments:app"
 
-
-[tool.setuptools]
-packages = ["dagster_uc"]
 
 [tool.pyright]
 
