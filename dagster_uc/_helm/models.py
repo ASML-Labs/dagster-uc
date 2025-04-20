@@ -450,7 +450,7 @@ class ReleaseRevision(ModelWithCommand):
         # Statuses from install/upgrade have chart metadata embedded
         if "chart" in status:
             self.chart_metadata_ = ChartMetadata(**status["chart"]["metadata"])
-        self.hooks = [
+        self.hooks_ = [  # type: ignore
             Hook(
                 name=hook["name"],
                 phase=hook["last_run"].get("phase") or "Unknown",  # type: ignore
