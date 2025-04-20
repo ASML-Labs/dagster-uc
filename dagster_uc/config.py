@@ -39,6 +39,7 @@ class UserCodeDeploymentsConfig:
     use_project_name: bool = True
     use_latest_chart_version: bool = False
     container_registry_chart_path: str | None = None
+    helm_disable_openapi_validation: bool = False
     user_code_deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
     dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"
@@ -66,11 +67,13 @@ def load_config(environment: str, path: str | None) -> "UserCodeDeploymentsConfi
             raise Exception(
                 f"Environment '{environment}' not specified in configuration file at '{path}'",
             )
-        data = raw_yaml[environment]
+        environment_data = raw_yaml[environment]
+        defaults_data = raw_yaml["defaults"]
+        combined_data = {**defaults_data, **environment_data}
 
     for field in fields(UserCodeDeploymentsConfig):
         if os.environ.get(field.name.upper(), None) is not None:
-            data[field.name] = os.environ[field.name.upper()]
+            combined_data[field.name] = os.environ[field.name.upper()]
 
-    logger.debug(f"Using configuration:\n {data}")
-    return UserCodeDeploymentsConfig(**data)
+    logger.debug(f"Using configuration:\n {combined_data}")
+    return UserCodeDeploymentsConfig(**combined_data)

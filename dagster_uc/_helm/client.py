@@ -95,6 +95,7 @@ class Client:
         skip_crds: bool = False,
         timeout: int | str | None = None,
         wait: bool = False,
+        disable_openapi_validation: bool = False,
     ) -> ReleaseRevision:
         """Install or upgrade the named release using the given chart and values and return
         the new revision.
@@ -119,6 +120,7 @@ class Client:
                 timeout=timeout,
                 version=chart.metadata.version,
                 wait=wait,
+                disable_openapi_validation=disable_openapi_validation,
             ),
             self._command,
         )

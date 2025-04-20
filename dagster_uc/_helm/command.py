@@ -159,6 +159,7 @@ class Command:
         timeout: int | str | None = None,
         version: str | None = None,
         wait: bool = False,
+        disable_openapi_validation: bool = False,
     ) -> dict[str, Any]:
         """Installs or upgrades the specified release using the given chart and values."""
         command = [
@@ -209,6 +210,8 @@ class Command:
             command.extend(["--version", version])
         if wait:
             command.extend(["--wait", "--wait-for-jobs"])
+        if disable_openapi_validation:
+            command.extend(["--disable-openapi-validation"])
         return json.loads(await self.run(command, json.dumps(values or {}).encode()))
 
     async def rollback(

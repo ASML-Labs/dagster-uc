@@ -225,6 +225,7 @@ class DagsterUserCodeHandler:
                 values_dict,
                 namespace=self.config.namespace,
                 wait=True,
+                disable_openapi_validation=self.config.helm_disable_openapi_validation,
             ),
         )
         if installed.status == ReleaseRevisionStatus.FAILED:
