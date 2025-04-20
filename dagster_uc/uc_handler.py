@@ -422,14 +422,14 @@ class DagsterUserCodeHandler:
         logger.debug("Going to read the cluster dagster version...")
         local_dagster_version = Version(self.config.dagster_version)
 
-        ## GETS cluster version from dagster deamon pod
-        deamon_pod = Pod.get(
+        ## GETS cluster version from dagster daemon pod
+        daemon_pod = Pod.get(
             label_selector="deployment=daemon",
             namespace=self.config.namespace,
             api=self.api,
         )
 
-        ex = deamon_pod.exec(command=["dagster", "--version"])
+        ex = daemon_pod.exec(command=["dagster", "--version"])
         output = ex.stdout.decode("ascii")  # type: ignore
         cluster_dagster_version = re.findall("version (.*)", output)
 
