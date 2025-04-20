@@ -6,7 +6,6 @@ from collections.abc import Callable
 from typing import NamedTuple
 
 import kr8s
-import pyhelm3
 import yaml
 from kr8s.objects import (
     ConfigMap,
@@ -169,8 +168,10 @@ class DagsterUserCodeHandler:
         """
         from datetime import datetime
 
-        from pyhelm3 import Client
         from pytz import timezone
+
+        from dagster_uc._helm import Client
+        from dagster_uc._helm.models import Release, ReleaseRevisionStatus
 
         tz = timezone("Europe/Amsterdam")
 
@@ -205,11 +206,10 @@ class DagsterUserCodeHandler:
                 wait=True,
             ),
         )
-        if installed.status == pyhelm3.ReleaseRevisionStatus.FAILED:
+        if installed.status == ReleaseRevisionStatus.FAILED:
             logger.error(
                 "Dagster-usercode helm release install or upgrade failed, rolling back now..",
             )
-            from pyhelm3 import Release
 
             release = Release(name=RELEASE_NAME, namespace=self.config.namespace)
             loop.run_until_complete(release.rollback())
