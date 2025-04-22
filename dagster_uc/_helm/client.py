@@ -98,6 +98,7 @@ class Client:
         timeout: int | str | None = None,
         wait: bool = False,
         disable_openapi_validation: bool = False,
+        skip_schema_validation: bool = False,
     ) -> ReleaseRevision:
         """Install or upgrade the named release using the given chart and values and return
         the new revision.
@@ -123,6 +124,7 @@ class Client:
                 version=chart.metadata.version,
                 wait=wait,
                 disable_openapi_validation=disable_openapi_validation,
+                skip_schema_validation=skip_schema_validation,
             ),
             self._command,
         )
