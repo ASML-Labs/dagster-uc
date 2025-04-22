@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import asyncio
 import logging
+import os
 import re
 import subprocess
 from collections.abc import Callable
 from typing import NamedTuple
 
 import kr8s
-import pyhelm3
 import yaml
 from kr8s.objects import (
     ConfigMap,
@@ -22,6 +24,7 @@ from packaging.version import Version
 from dagster_uc.config import UserCodeDeploymentsConfig
 from dagster_uc.configmaps import BASE_CONFIGMAP, BASE_CONFIGMAP_DATA
 from dagster_uc.log import logger
+from dagster_uc.utils import login_registry_helm
 
 
 class DagsterDeployment(NamedTuple):
@@ -169,8 +172,10 @@ class DagsterUserCodeHandler:
         """
         from datetime import datetime
 
-        from pyhelm3 import Client
         from pytz import timezone
+
+        from dagster_uc._helm import Client
+        from dagster_uc._helm.models import Release, ReleaseRevisionStatus
 
         tz = timezone("Europe/Amsterdam")
 
@@ -182,16 +187,35 @@ class DagsterUserCodeHandler:
         self.update_dagster_workspace_yaml()
 
         loop = asyncio.new_event_loop()
+
+        if self.config.use_az_login and self.config.container_registry_chart_path is not None:
+            login_registry_helm(self.config.container_registry)
+
         RELEASE_NAME = "dagster-user-code"  # noqa
         helm_client = Client(kubecontext=self.config.kubernetes_context)
 
-        chart = loop.run_until_complete(
-            helm_client.get_chart(
-                chart_ref="dagster-user-deployments",
-                repo="https://dagster-io.github.io/helm",
-                version=self.config.dagster_version,
-            ),
-        )
+        if self.config.container_registry_chart_path is None:
+            chart = loop.run_until_complete(
+                helm_client.get_chart(
+                    chart_ref="dagster-user-deployments",
+                    repo="https://dagster-io.github.io/helm",
+                    version=self.config.dagster_version
+                    if not self.config.use_latest_chart_version
+                    else None,
+                ),
+            )
+        else:
+            chart = loop.run_until_complete(
+                helm_client.get_chart(
+                    chart_ref=os.path.join(
+                        f"oci://{self.config.container_registry}",
+                        self.config.container_registry_chart_path,
+                    ),
+                    version=self.config.dagster_version
+                    if not self.config.use_latest_chart_version
+                    else None,
+                ),
+            )
         logger.info(
             "Upgrading helm release '%s'...",
             RELEASE_NAME,
@@ -203,13 +227,13 @@ class DagsterUserCodeHandler:
                 values_dict,
                 namespace=self.config.namespace,
                 wait=True,
+                disable_openapi_validation=self.config.helm_disable_openapi_validation,
             ),
         )
-        if installed.status == pyhelm3.ReleaseRevisionStatus.FAILED:
+        if installed.status == ReleaseRevisionStatus.FAILED:
             logger.error(
                 "Dagster-usercode helm release install or upgrade failed, rolling back now..",
             )
-            from pyhelm3 import Release
 
             release = Release(name=RELEASE_NAME, namespace=self.config.namespace)
             loop.run_until_complete(release.rollback())
@@ -422,14 +446,14 @@ class DagsterUserCodeHandler:
         logger.debug("Going to read the cluster dagster version...")
         local_dagster_version = Version(self.config.dagster_version)
 
-        ## GETS cluster version from dagster deamon pod
-        deamon_pod = Pod.get(
+        ## GETS cluster version from dagster daemon pod
+        daemon_pod = Pod.get(
             label_selector="deployment=daemon",
             namespace=self.config.namespace,
             api=self.api,
         )
 
-        ex = deamon_pod.exec(command=["dagster", "--version"])
+        ex = daemon_pod.exec(command=["dagster", "--version"])
         output = ex.stdout.decode("ascii")  # type: ignore
         cluster_dagster_version = re.findall("version (.*)", output)
 

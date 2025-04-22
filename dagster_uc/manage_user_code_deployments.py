@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # ruff: noqa: D103
+from __future__ import annotations
+
 import contextlib
 import json
 import logging
@@ -18,7 +20,12 @@ from kr8s.objects import (
 from dagster_uc.config import UserCodeDeploymentsConfig, load_config
 from dagster_uc.log import logger
 from dagster_uc.uc_handler import DagsterUserCodeHandler
-from dagster_uc.utils import BuildTool, build_and_push, gen_tag, is_command_available
+from dagster_uc.utils import (
+    BuildTool,
+    build_and_push,
+    gen_tag,
+    is_command_available,
+)
 
 app = typer.Typer(invoke_without_command=True)
 deployment_app = typer.Typer(
@@ -133,6 +140,9 @@ def init_config(
     initialized_config = UserCodeDeploymentsConfig(
         environment=typer.prompt("""What environment is this config for [dev, acc, prod etc.]"""),
         container_registry=typer.prompt("Container registry address"),
+        container_registry_chart_path=optional_prompt(
+            "Relative helm chart path of the previously provided container registry",
+        ),
         dockerfile=typer.prompt("Path of dockerfile", default="./Dockerfile"),
         image_prefix=typer.prompt("Prefix for container image to use"),
         namespace=typer.prompt("Namespace of kubernetes deployment"),
@@ -163,7 +173,12 @@ def init_config(
         ),
         kubernetes_context=typer.prompt("Kubernetes context of the cluster to use for api calls"),
         dagster_gui_url=optional_prompt("URL of dagster UI"),
-        use_az_login=typer.confirm("Whether to use az cli to login to container registry"),
+        use_latest_chart_version=typer.confirm(
+            "Whether to use latest chart version, if disabled will always use the config dagster version",
+        ),
+        use_az_login=typer.confirm(
+            "Whether to use az cli to login to container registry with podman, and helm if oci charts are used.",
+        ),
         use_project_name=typer.confirm(
             "Whether to use the pyproject.toml project-name as deployment name prefix.",
         ),

@@ -62,7 +62,7 @@ dev:
 
 ## Environment Configuration
 
-Dagster-uc allows you to have specific user-code deployement configurations per environment. This enables different configurations for your Kubernetes cluster, container registry, resource usage, etc.
+Dagster-uc allows you to have specific user-code deployment configurations per environment. This enables different configurations for your Kubernetes cluster, container registry, resource usage, etc.
 
 The default environment used is `dev`, so you need to have `dev` in your configuration file. Other environment names are up to you. An example structure:
 
@@ -79,6 +79,18 @@ prd:
 ```
 
 Specify the environment with `dagster-uc --environment prd deployment deploy`, or `dagster-uc -e prd deployment deploy` to use the prd config for the deployment.
+
+### Settings defaults
+
+Defaults can be specified for all environments, every key that can be set in the main config can be defined in the defaults. Order of loading config, is defaults -> environment config -> environment variable override.
+
+```yaml
+defaults:
+  repository_root: "."
+  docker_root: "."
+  dockerfile: "docker/dev/Dockerfile"
+  image_prefix: 'team-alpha'
+```
 
 ### Overriding Config Settings Through Environment Variables
 

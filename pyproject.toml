@@ -1,6 +1,6 @@
 [project]
 name = "dagster-uc"
-version = "0.4.0"
+version = "0.5.0"
 authors = [
     {name = "Stefan Verbruggen"},
     {name = "Ion Koutsouris"},
@@ -18,11 +18,11 @@ classifiers = [
 ]
 dependencies = [
     "kr8s>=0.20.1,<1.0",
-    "pyhelm3>=0.3.3",
     "typer>=0.15.1",
     "tomli",
     "pyyaml",
-    "pytz"
+    "pytz",
+    "pydantic>=2",
 ]
 
 [tool.uv]
@@ -31,7 +31,8 @@ dev-dependencies = [
     "pyright",
     "pytest",
     "pip",
-    "build"
+    "build",
+    "typos>=1.31.1",
 ]
 
 [project.urls]
@@ -39,14 +40,12 @@ Homepage = "https://github.com/ASML-Labs/dagster-uc"
 Issues = "https://github.com/ASML-Labs/dagster-uc/issues"
 
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project.scripts]
 dagster-uc = "dagster_uc.manage_user_code_deployments:app"
 
-
-[tool.setuptools]
-packages = ["dagster_uc"]
 
 [tool.pyright]
 
@@ -129,6 +128,9 @@ lint.ignore = [
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 lint.fixable = ["ALL"]
 
+# Allow unused variables when underscore-prefixed.
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
@@ -156,9 +158,6 @@ exclude = [
 ]
 # Same as Black.
 line-length = 100
-
-# Allow unused variables when underscore-prefixed.
-lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Assume Python 3.10
 target-version = "py310"

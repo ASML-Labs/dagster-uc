@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import re
 import subprocess
@@ -67,7 +69,7 @@ def gen_tag(
     dagster_version: str,
     use_az_login: bool,
 ) -> str:
-    """Identifies the latest tag present in the Containr registry and increments it by one."""
+    """Identifies the latest tag present in the container registry and increments it by one."""
     if use_az_login:
         login_registry(container_registry)
 
@@ -111,9 +113,8 @@ def run_cli_command_streaming(cmd: str, as_user: str = "") -> None:
     Popen(cmd, stdout=sys.stdout, stderr=sys.stderr, env=os.environ.copy(), shell=True)
 
 
-def login_registry(image_registry: str) -> None:
-    """Logs into registry with az cli"""
-    typer.echo("Logging into acr...")
+def get_azure_access_token(image_registry: str) -> bytes:
+    """Get azure access token"""
     cmd = [
         "az",
         "acr",
@@ -130,7 +131,13 @@ def login_registry(image_registry: str) -> None:
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=False)
     output, error = process.communicate()
     token = output.decode().strip().encode("utf-8")
+    return token
 
+
+def login_registry(image_registry: str) -> None:
+    """Logs into registry with az cli"""
+    typer.echo(f"Logging into acr with {BuildTool.podman.value}...")
+    token = get_azure_access_token(image_registry)
     cmd = [
         BuildTool.podman.value,
         "login",
@@ -138,6 +145,22 @@ def login_registry(image_registry: str) -> None:
         "00000000-0000-0000-0000-000000000000",
         "--password-stdin",
         image_registry,
+    ]
+    exception_on_failed_subprocess(subprocess.run(cmd, input=token, capture_output=False))
+
+
+def login_registry_helm(image_registry: str) -> None:
+    """Logs into registry with az cli"""
+    typer.echo("Logging into acr with helm ...")
+    token = get_azure_access_token(image_registry)
+    cmd = [
+        "helm",
+        "registry",
+        "login",
+        image_registry,
+        "--username",
+        "00000000-0000-0000-0000-000000000000",
+        "--password-stdin",
     ]
     exception_on_failed_subprocess(subprocess.run(cmd, input=token, capture_output=False))
 
