@@ -42,6 +42,7 @@ class UserCodeDeploymentsConfig:
     use_latest_chart_version: bool = False
     container_registry_chart_path: str | None = None
     helm_disable_openapi_validation: bool = False
+    helm_skip_schema_validation: bool = False
     user_code_deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
     dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"

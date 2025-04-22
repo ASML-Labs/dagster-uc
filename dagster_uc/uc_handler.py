@@ -228,6 +228,7 @@ class DagsterUserCodeHandler:
                 namespace=self.config.namespace,
                 wait=True,
                 disable_openapi_validation=self.config.helm_disable_openapi_validation,
+                skip_schema_validation=self.config.helm_skip_schema_validation,
             ),
         )
         if installed.status == ReleaseRevisionStatus.FAILED:
