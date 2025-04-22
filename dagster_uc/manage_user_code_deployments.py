@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # ruff: noqa: D103
+from __future__ import annotations
+
 import contextlib
 import json
 import logging

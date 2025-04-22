@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 class Error(Exception):
     """Raised when an error occurs with a Helm command."""
 

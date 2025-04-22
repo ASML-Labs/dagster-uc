@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass, fields
 
@@ -45,7 +47,7 @@ class UserCodeDeploymentsConfig:
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"
 
 
-def load_config(environment: str, path: str | None) -> "UserCodeDeploymentsConfig":
+def load_config(environment: str, path: str | None) -> UserCodeDeploymentsConfig:
     """Loads the configuration file from the local dir or the user's home dir."""
     if path is None:
         paths_to_try = [

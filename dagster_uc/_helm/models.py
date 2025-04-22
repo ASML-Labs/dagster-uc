@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import enum
 import pathlib
@@ -249,7 +251,7 @@ class Release(ModelWithCommand):
         description="The namespace of the release.",
     )
 
-    async def current_revision(self) -> "ReleaseRevision":
+    async def current_revision(self) -> ReleaseRevision:
         """Returns the current revision for the release."""
         return ReleaseRevision._from_status(
             await self._command.status(
@@ -259,7 +261,7 @@ class Release(ModelWithCommand):
             self._command,
         )
 
-    async def revision(self, revision: int) -> "ReleaseRevision":
+    async def revision(self, revision: int) -> ReleaseRevision:
         """Returns the specified revision for the release."""
         return ReleaseRevision._from_status(
             await self._command.status(
@@ -281,7 +283,7 @@ class Release(ModelWithCommand):
         recreate_pods: bool = False,
         timeout: int | str | None = None,
         wait: bool = False,
-    ) -> "ReleaseRevision":
+    ) -> ReleaseRevision:
         """Rollback this release to the specified version and return the resulting revision.
 
         If no revision is specified, it will rollback to the previous release.
@@ -465,7 +467,7 @@ class ReleaseRevision(ModelWithCommand):
         self.resources_ = list(yaml.load_all(status["manifest"], Loader=SafeLoader))
 
     @classmethod
-    def _from_status(cls, status: dict[str, Any], command: Command) -> "ReleaseRevision":
+    def _from_status(cls, status: dict[str, Any], command: Command) -> ReleaseRevision:
         """Internal constructor to create a release revision from a status result."""
         revision = ReleaseRevision(
             command,  # type: ignore
