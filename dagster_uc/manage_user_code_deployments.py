@@ -255,27 +255,40 @@ def deployment_delete(
         ),
     ] = False,
     name: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--name",
             "-n",
             help="The name of the deployment to delete. If none is provided, the deployment corresponding to the currently checked out git branch will be deleted.",
         ),
-    ] = "",
+    ] = None,
+    branch: Annotated[
+        str | None,
+        typer.Option(
+            "--branch",
+            "-b",
+            help="Can be the branch name as-is, this will be converted to a dagster-uc compatible deployment name.",
+        ),
+    ] = None,
 ) -> None:
     if delete_all:
         handler.remove_all_deployments()
         handler.deploy_to_k8s(reload_dagster=True)
         typer.echo("\033[1mDeleted all deployments\033[0m")
     else:
-        if not name:
-            name = handler.get_deployment_name(
-                deployment_name_suffix="",
-                use_project_name=config.use_project_name,
-            ).full_name
-        else:
+        if name is not None:
             # In case the UI name separator of the deployment is passed
             name = name.replace(":", "--")
+        elif branch is not None:
+            name = handler.get_deployment_name(
+                use_project_name=config.use_project_name,
+                branch=branch,
+            ).full_name
+        else:
+            name = handler.get_deployment_name(
+                use_project_name=config.use_project_name,
+            ).full_name
+
         handler.remove_user_deployment_from_configmap(name)
         handler.deploy_to_k8s(reload_dagster=True)
         typer.echo(f"Deleted deployment \033[1m{name}\033[0m")
