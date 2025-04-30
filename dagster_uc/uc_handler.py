@@ -428,7 +428,9 @@ class DagsterUserCodeHandler:
 
         project_name = self._get_project_name() if use_project_name else None
 
-        if not self.config.cicd:
+        if self.config.cicd and branch is None:
+            branch = self.config.environment
+        else:
             if branch is None:
                 branch = subprocess.check_output(
                     ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -436,10 +438,8 @@ class DagsterUserCodeHandler:
             if deployment_name_suffix:
                 branch += deployment_name_suffix
             branch = re.sub(r"[^a-zA-Z0-9]+", "-", branch).strip("-")  # Strips double --
-            name = f"{project_name}--{branch}" if project_name is not None else branch
-        else:
-            branch = self.config.environment
-            name = f"{project_name}--{branch}" if project_name is not None else branch
+
+        name = f"{project_name}--{branch}" if project_name is not None else branch
 
         return DagsterDeployment(
             full_name=name,
