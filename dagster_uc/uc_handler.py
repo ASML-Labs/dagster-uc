@@ -225,6 +225,7 @@ class DagsterUserCodeHandler:
                 RELEASE_NAME,
                 chart,
                 values_dict,
+                create_namespace=self.config.helm_create_new_namespace,
                 namespace=self.config.namespace,
                 wait=True,
                 disable_openapi_validation=self.config.helm_disable_openapi_validation,
