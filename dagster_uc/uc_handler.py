@@ -57,7 +57,7 @@ class DagsterUserCodeHandler:
             dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
                 BASE_CONFIGMAP_DATA,
             )
-
+            dagster_user_deployments_values_yaml_configmap["data"]["yaml"]['imagePullSecrets'] = self.config.image_pull_secrets
             ConfigMap(
                 resource=dagster_user_deployments_values_yaml_configmap,
                 namespace=self.config.namespace,
