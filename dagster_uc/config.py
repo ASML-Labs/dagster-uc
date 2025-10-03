@@ -24,6 +24,9 @@ class UserCodeDeploymentsConfig:
     docker_root: str
     repository_root: str
     dagster_version: str
+    image_pull_secrets: list[
+        dict[str, str]
+    ]   # Must be list of dicts with key 'name' like so: [{"name": "sp-credentials"}, {"name": "lakefs-credentials"}]
     user_code_deployment_env_secrets: list[
         dict[str, str]
     ]  # Must be list of dicts with key 'name' like so: [{"name": "sp-credentials"}, {"name": "lakefs-credentials"}]

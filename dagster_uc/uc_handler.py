@@ -306,6 +306,7 @@ class DagsterUserCodeHandler:
                     "effect": "NoSchedule",
                 },
             ],
+            "imagePullSecrets": self.config.image_pull_secrets,
             "podSecurityContext": {},
             "securityContext": {},
             "labels": {},
@@ -318,7 +319,8 @@ class DagsterUserCodeHandler:
             },
             "livenessProbe": {},
             "startupProbe": {"enabled": False},
-            "service": {"annotations": {}},
+            "service": {"annotations": {'meta.helm.sh/release-name':'dagster-user-code',
+                                        'meta.helm.sh/release-namespace': self.config.namespace}},
         }
         logger.debug(f"Generated user code deployment:\n{deployment}")
         return deployment
