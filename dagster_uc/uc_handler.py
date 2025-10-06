@@ -323,7 +323,7 @@ class DagsterUserCodeHandler:
                 "annotations": {
                     "meta.helm.sh/release-name": "dagster-user-code",
                     "meta.helm.sh/release-namespace": self.config.namespace,
-                }
+                },
             },
         }
         logger.debug(f"Generated user code deployment:\n{deployment}")
