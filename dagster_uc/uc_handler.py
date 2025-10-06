@@ -54,10 +54,10 @@ class DagsterUserCodeHandler:
             dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
                 self.config.user_code_deployments_configmap_name
             )
+            BASE_CONFIGMAP_DATA["imagePullSecrets"] = self.config.image_pull_secrets
             dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
                 BASE_CONFIGMAP_DATA,
             )
-
             ConfigMap(
                 resource=dagster_user_deployments_values_yaml_configmap,
                 namespace=self.config.namespace,
@@ -225,6 +225,7 @@ class DagsterUserCodeHandler:
                 RELEASE_NAME,
                 chart,
                 values_dict,
+                create_namespace=self.config.helm_create_new_namespace,
                 namespace=self.config.namespace,
                 wait=True,
                 disable_openapi_validation=self.config.helm_disable_openapi_validation,
@@ -305,6 +306,7 @@ class DagsterUserCodeHandler:
                     "effect": "NoSchedule",
                 },
             ],
+            "imagePullSecrets": self.config.image_pull_secrets,
             "podSecurityContext": {},
             "securityContext": {},
             "labels": {},
@@ -317,7 +319,12 @@ class DagsterUserCodeHandler:
             },
             "livenessProbe": {},
             "startupProbe": {"enabled": False},
-            "service": {"annotations": {}},
+            "service": {
+                "annotations": {
+                    "meta.helm.sh/release-name": "dagster-user-code",
+                    "meta.helm.sh/release-namespace": self.config.namespace,
+                },
+            },
         }
         logger.debug(f"Generated user code deployment:\n{deployment}")
         return deployment

@@ -191,7 +191,6 @@ def build_and_push(
         "--build-arg=BRANCH_NAME=" + branch_name,
         ".",
     ]
-
     for env_var in build_envs:
         cmd.extend(["--env", env_var])
 

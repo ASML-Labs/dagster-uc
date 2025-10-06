@@ -171,6 +171,7 @@ def init_config(
                 default=json.dumps({"cpu": "2", "memory": "2Gi"}),
             ),
         ),
+        image_pull_secrets=[],
         kubernetes_context=typer.prompt("Kubernetes context of the cluster to use for api calls"),
         dagster_gui_url=optional_prompt("URL of dagster UI"),
         use_latest_chart_version=typer.confirm(
