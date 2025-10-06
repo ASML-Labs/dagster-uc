@@ -59,6 +59,7 @@ class DagsterUserCodeHandler:
             dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
                 base_copy,
             )
+
             ConfigMap(
                 resource=dagster_user_deployments_values_yaml_configmap,
                 namespace=self.config.namespace,
