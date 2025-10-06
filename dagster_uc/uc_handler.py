@@ -75,10 +75,10 @@ class DagsterUserCodeHandler:
         dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
         default_map =deepcopy(BASE_CONFIGMAP_DATA)
         default_map['imagePullSecrets'] = self.config.image_pull_secrets
+        
         dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
             default_map,
         )
-        
         configmap = self._read_namespaced_config_map(
             self.config.user_code_deployments_configmap_name,
         )
