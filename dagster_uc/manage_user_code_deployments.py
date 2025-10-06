@@ -191,7 +191,6 @@ def init_config(
             "Configmap name of the dagster_workspace_yaml",
             default="dagster-workspace-yaml",
         ),
-
     )
     with open(file, "w") as fp:
         import yaml

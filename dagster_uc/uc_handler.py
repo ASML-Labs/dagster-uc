@@ -54,7 +54,7 @@ class DagsterUserCodeHandler:
             dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
                 self.config.user_code_deployments_configmap_name
             )
-            BASE_CONFIGMAP_DATA['imagePullSecrets'] = self.config.image_pull_secrets
+            BASE_CONFIGMAP_DATA["imagePullSecrets"] = self.config.image_pull_secrets
             dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
                 BASE_CONFIGMAP_DATA,
             )
@@ -319,8 +319,12 @@ class DagsterUserCodeHandler:
             },
             "livenessProbe": {},
             "startupProbe": {"enabled": False},
-            "service": {"annotations": {'meta.helm.sh/release-name':'dagster-user-code',
-                                        'meta.helm.sh/release-namespace': self.config.namespace}},
+            "service": {
+                "annotations": {
+                    "meta.helm.sh/release-name": "dagster-user-code",
+                    "meta.helm.sh/release-namespace": self.config.namespace,
+                }
+            },
         }
         logger.debug(f"Generated user code deployment:\n{deployment}")
         return deployment
