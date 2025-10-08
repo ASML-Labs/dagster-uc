@@ -54,10 +54,12 @@ class DagsterUserCodeHandler:
             dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
                 self.config.user_code_deployments_configmap_name
             )
-            BASE_CONFIGMAP_DATA["imagePullSecrets"] = self.config.image_pull_secrets
+            base_copy = deepcopy(BASE_CONFIGMAP_DATA)
+            base_copy["imagePullSecrets"] = self.config.image_pull_secrets
             dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
-                BASE_CONFIGMAP_DATA,
+                base_copy,
             )
+
             ConfigMap(
                 resource=dagster_user_deployments_values_yaml_configmap,
                 namespace=self.config.namespace,
@@ -72,10 +74,12 @@ class DagsterUserCodeHandler:
         from copy import deepcopy
 
         dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
-        dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
-            BASE_CONFIGMAP_DATA,
-        )
+        default_map = deepcopy(BASE_CONFIGMAP_DATA)
+        default_map["imagePullSecrets"] = self.config.image_pull_secrets
 
+        dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
+            default_map,
+        )
         configmap = self._read_namespaced_config_map(
             self.config.user_code_deployments_configmap_name,
         )
@@ -411,7 +415,7 @@ class DagsterUserCodeHandler:
         logging.debug(f"List of currently configured deployments:\n{depl_list_str}\n\n")
         new_configmap_data = deepcopy(BASE_CONFIGMAP_DATA)
         new_configmap_data["deployments"] = current_deployments
-
+        new_configmap_data["imagePullSecrets"] = self.config.image_pull_secrets
         new_configmap = deepcopy(BASE_CONFIGMAP)
         new_configmap["data"]["yaml"] = yaml.dump(new_configmap_data)
 
