@@ -74,7 +74,7 @@ def gen_tag(
 ) -> str:
     """Identifies the latest tag present in the container registry and increments it by one."""
     if use_az_login:
-        login_registry(container_registry, build_tool=build_tool)
+        login_registry(container_registry, build_tool=build_tool, use_sudo=use_sudo)
 
     res = run_cli_command(
         f"{'sudo ' if use_sudo else ''}{BuildTool.podman.value} search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}} --limit 9999999",
@@ -224,7 +224,7 @@ def build_and_push(
     exception_on_failed_subprocess(subprocess.run(cmd, capture_output=False))
 
     if use_az_login:
-        login_registry(image_registry=image_registry, build_tool=build_tool)
+        login_registry(image_registry=image_registry, build_tool=build_tool, use_sudo=use_sudo)
 
     typer.echo("Pushing image...")
     cmd = [build_tool, "push", os.path.join(image_registry, f"{image_name}:{tag}")]
