@@ -400,10 +400,10 @@ def deployment_deploy(
         logger.debug("Determining build tool...")
         if not is_command_available(BuildTool.podman.value):
             if use_sudo:
-                if not is_command_available(f'sudo {BuildTool.podman.value}'):
+                if not is_command_available(f"sudo {BuildTool.podman.value}"):
                     raise Exception("Podman installation is required to run dagster-uc.")
                 else:
-                    raise Warning('Sudo is required to run podman')
+                    raise Warning("Sudo is required to run podman")
             else:
                 raise Exception("Podman installation is required to run dagster-uc.")
 
