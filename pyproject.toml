@@ -23,6 +23,7 @@ dependencies = [
     "pyyaml",
     "pytz",
     "pydantic>=2",
+    "packaging>=25.0",
 ]
 
 [tool.uv]
