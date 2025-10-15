@@ -110,6 +110,8 @@ def build_push_container(
         branch_name=branch_name,
         use_az_login=config.use_az_login,
         build_envs=config.docker_env_vars if config.docker_env_vars is not None else [],
+        build_tool=config.build_tool,
+        build_format=config.build_format,
     )
 
 

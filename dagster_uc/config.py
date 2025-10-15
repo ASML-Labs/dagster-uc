@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, fields
+from typing import Literal
 
 import yaml
 
@@ -51,6 +52,8 @@ class UserCodeDeploymentsConfig:
     dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"
     uc_release_name: str = "dagster-user-code"
+    build_tool: Literal["podman", "docker", "auto"] = "podman"
+    build_format: Literal["OCI", "docker"] = "OCI"
 
 
 def load_config(environment: str, path: str | None) -> UserCodeDeploymentsConfig:
