@@ -136,7 +136,8 @@ def get_azure_access_token(image_registry: str) -> bytes:
 
 
 def login_registry(
-    image_registry: str, build_tool: Literal["podman", "docker", "auto"] = "podman"
+    image_registry: str,
+    build_tool: Literal["podman", "docker", "auto"] = "podman",
 ) -> None:
     """Logs into registry with az cli"""
     typer.echo(f"Logging into acr with {BuildTool.podman.value}...")
