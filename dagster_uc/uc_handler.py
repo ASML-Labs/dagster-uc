@@ -195,7 +195,7 @@ class DagsterUserCodeHandler:
         if self.config.use_az_login and self.config.container_registry_chart_path is not None:
             login_registry_helm(self.config.container_registry)
 
-        RELEASE_NAME = "dagster-user-code"  # noqa
+        RELEASE_NAME = self.config.uc_release_name  # noqa
         helm_client = Client(kubecontext=self.config.kubernetes_context)
 
         if self.config.container_registry_chart_path is None:
@@ -325,7 +325,7 @@ class DagsterUserCodeHandler:
             "startupProbe": {"enabled": False},
             "service": {
                 "annotations": {
-                    "meta.helm.sh/release-name": "dagster-user-code",
+                    "meta.helm.sh/release-name": self.config.uc_release_name,
                     "meta.helm.sh/release-namespace": self.config.namespace,
                 },
             },
