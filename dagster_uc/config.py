@@ -50,9 +50,7 @@ class UserCodeDeploymentsConfig:
     user_code_deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
     dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"
-    uc_release_name: str = 'dagster-user-code'
-    
-
+    uc_release_name: str = "dagster-user-code"
 
 
 def load_config(environment: str, path: str | None) -> UserCodeDeploymentsConfig:
