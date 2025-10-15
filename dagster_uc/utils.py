@@ -69,13 +69,15 @@ def gen_tag(
     container_registry: str,
     dagster_version: str,
     use_az_login: bool,
+    build_tool: Literal["podman", "docker", "auto"] = "podman",
+    use_sudo: bool = False,
 ) -> str:
     """Identifies the latest tag present in the container registry and increments it by one."""
     if use_az_login:
-        login_registry(container_registry)
+        login_registry(container_registry, build_tool=build_tool)
 
     res = run_cli_command(
-        f"podman search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}} --limit 9999999",
+        f"{'sudo ' if use_sudo else ''}{BuildTool.podman.value} search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}} --limit 9999999",
         ignore_failures=True,
         capture_output=True,
         timeout=15,
@@ -138,18 +140,21 @@ def get_azure_access_token(image_registry: str) -> bytes:
 def login_registry(
     image_registry: str,
     build_tool: Literal["podman", "docker", "auto"] = "podman",
+    use_sudo: bool = False,
 ) -> None:
     """Logs into registry with az cli"""
     typer.echo(f"Logging into acr with {BuildTool.podman.value}...")
     token = get_azure_access_token(image_registry)
     cmd = [
-        build_tool,
+        f"{build_tool}",
         "login",
         "--username",
         "00000000-0000-0000-0000-000000000000",
         "--password-stdin",
         image_registry,
     ]
+    if use_sudo:
+        cmd = ["sudo"] + cmd
     exception_on_failed_subprocess(subprocess.run(cmd, input=token, capture_output=False))
 
 

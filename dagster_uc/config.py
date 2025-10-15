@@ -52,7 +52,6 @@ class UserCodeDeploymentsConfig:
     dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     uc_deployment_semaphore_name: str = "dagster-uc-semaphore"
     uc_release_name: str = "dagster-user-code"
-    build_tool: Literal["podman", "docker", "auto"] = "podman"
     build_format: Literal["OCI", "docker"] = "OCI"
 
 

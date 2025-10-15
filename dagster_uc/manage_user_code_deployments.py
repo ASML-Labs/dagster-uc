@@ -110,7 +110,6 @@ def build_push_container(
         branch_name=branch_name,
         use_az_login=config.use_az_login,
         build_envs=config.docker_env_vars if config.docker_env_vars is not None else [],
-        build_tool=config.build_tool,
         build_format=config.build_format,
     )
 
@@ -403,7 +402,7 @@ def deployment_deploy(
                 if not is_command_available(f"sudo {BuildTool.podman.value}"):
                     raise Exception("Podman installation is required to run dagster-uc.")
                 else:
-                    raise Warning("Sudo is required to run podman")
+                    raise Warning("Sudo is required to run podman in this environment")
             else:
                 raise Exception("Podman installation is required to run dagster-uc.")
 
@@ -428,6 +427,7 @@ def deployment_deploy(
             config.container_registry,
             config.dagster_version,
             config.use_az_login,
+            use_sudo=use_sudo,
         )
 
         typer.echo(f"Deploying deployment \033[1m'{deployment_name}:{new_tag}'\033[0m")
