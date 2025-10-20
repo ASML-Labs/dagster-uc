@@ -203,7 +203,7 @@ def build_and_push(
     ]
     if build_tool == BuildTool.podman.value and build_format == "docker":
         cmd += ["--format", "docker"]
-    cmd += ['.'] # Since this always has to be at the nd
+    cmd += ["."]  # Since this always has to be at the nd
     for env_var in build_envs:
         cmd.extend(["--env", env_var])
 

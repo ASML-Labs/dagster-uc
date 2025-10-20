@@ -387,8 +387,8 @@ def deployment_deploy(
     ignore_check: Annotated[
         bool,
         typer.Option(
-            '--ignore-check',
-            help="If this is provided, ignore the check for if podman is installed. This is used for some CI/CD environments that require podman to always be in sudo mode"
+            "--ignore-check",
+            help="If this is provided, ignore the check for if podman is installed. This is used for some CI/CD environments that require podman to always be in sudo mode",
         ),
     ] = False,
 ):
