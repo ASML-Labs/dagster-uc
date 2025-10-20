@@ -182,7 +182,6 @@ def build_and_push(
     branch_name: str,
     use_az_login: bool,
     build_envs: list[str],
-    build_tool: Literal["podman", "docker", "auto"] = "podman",
     build_format: Literal["OCI", "docker"] = "OCI",
 ):
     """Build a docker image and push it to the registry"""
@@ -191,7 +190,7 @@ def build_and_push(
     os.chdir(repository_root)
 
     cmd = [
-        build_tool,
+        BuildTool.podman.value,
         "build",
         "-f",
         os.path.join(os.getcwd(), dockerfile),
@@ -199,7 +198,7 @@ def build_and_push(
         os.path.join(image_registry, f"{image_name}:{tag}"),
         "--build-arg=BRANCH_NAME=" + branch_name,
     ]
-    if build_tool == BuildTool.podman.value and build_format == "docker":
+    if build_format == "docker":
         cmd += ["--format", "docker"]
     cmd += ["."]  # Since this always has to be at the nd
     for env_var in build_envs:
