@@ -110,6 +110,7 @@ def build_push_container(
         branch_name=branch_name,
         use_az_login=config.use_az_login,
         build_envs=config.docker_env_vars if config.docker_env_vars is not None else [],
+        build_format=config.build_format,
     )
 
 
@@ -383,6 +384,13 @@ def deployment_deploy(
             help="If this is provided, buildah or docker will be called with sudo",
         ),
     ] = False,
+    ignore_check: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-check",
+            help="If this is provided, ignore the check for if podman is installed. This is used for some CI/CD environments that require podman to always be in sudo mode",
+        ),
+    ] = False,
 ):
     handler._ensure_dagster_version_match()
 
@@ -396,7 +404,7 @@ def deployment_deploy(
 
     try:
         logger.debug("Determining build tool...")
-        if not is_command_available(BuildTool.podman.value):
+        if not ignore_check and not is_command_available(BuildTool.podman.value):
             raise Exception("Podman installation is required to run dagster-uc.")
 
         logger.debug("Using 'podman' to build image.")
@@ -420,6 +428,7 @@ def deployment_deploy(
             config.container_registry,
             config.dagster_version,
             config.use_az_login,
+            use_sudo=use_sudo,
         )
 
         typer.echo(f"Deploying deployment \033[1m'{deployment_name}:{new_tag}'\033[0m")

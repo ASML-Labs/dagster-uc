@@ -6,6 +6,7 @@ import subprocess
 import sys
 from enum import Enum
 from subprocess import Popen, TimeoutExpired
+from typing import Literal
 
 import typer
 
@@ -68,13 +69,14 @@ def gen_tag(
     container_registry: str,
     dagster_version: str,
     use_az_login: bool,
+    use_sudo: bool = False,
 ) -> str:
     """Identifies the latest tag present in the container registry and increments it by one."""
     if use_az_login:
-        login_registry(container_registry)
+        login_registry(container_registry, use_sudo=use_sudo)
 
     res = run_cli_command(
-        f"podman search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}} --limit 9999999",
+        f"{'sudo ' if use_sudo else ''}{BuildTool.podman.value} search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}} --limit 9999999",
         ignore_failures=True,
         capture_output=True,
         timeout=15,
@@ -134,7 +136,10 @@ def get_azure_access_token(image_registry: str) -> bytes:
     return token
 
 
-def login_registry(image_registry: str) -> None:
+def login_registry(
+    image_registry: str,
+    use_sudo: bool = False,
+) -> None:
     """Logs into registry with az cli"""
     typer.echo(f"Logging into acr with {BuildTool.podman.value}...")
     token = get_azure_access_token(image_registry)
@@ -146,6 +151,8 @@ def login_registry(image_registry: str) -> None:
         "--password-stdin",
         image_registry,
     ]
+    if use_sudo:
+        cmd = ["sudo"] + cmd
     exception_on_failed_subprocess(subprocess.run(cmd, input=token, capture_output=False))
 
 
@@ -175,6 +182,7 @@ def build_and_push(
     branch_name: str,
     use_az_login: bool,
     build_envs: list[str],
+    build_format: Literal["OCI", "docker"] = "OCI",
 ):
     """Build a docker image and push it to the registry"""
     # We need to work from the root of the repo so docker can access all files
@@ -189,8 +197,10 @@ def build_and_push(
         "-t",
         os.path.join(image_registry, f"{image_name}:{tag}"),
         "--build-arg=BRANCH_NAME=" + branch_name,
-        ".",
     ]
+    if build_format == "docker":
+        cmd += ["--format", "docker"]
+    cmd += ["."]  # Since this always has to be at the end
     for env_var in build_envs:
         cmd.extend(["--env", env_var])
 
@@ -200,7 +210,7 @@ def build_and_push(
     exception_on_failed_subprocess(subprocess.run(cmd, capture_output=False))
 
     if use_az_login:
-        login_registry(image_registry=image_registry)
+        login_registry(image_registry=image_registry, use_sudo=use_sudo)
 
     typer.echo("Pushing image...")
     cmd = [BuildTool.podman.value, "push", os.path.join(image_registry, f"{image_name}:{tag}")]
