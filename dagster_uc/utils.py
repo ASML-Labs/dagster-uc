@@ -191,30 +191,19 @@ def build_and_push(
     # We need to work from the root of the repo so docker can access all files
     previous_dir = os.getcwd()
     os.chdir(repository_root)
+
+    cmd = [
+        build_tool,
+        "build",
+        "-f",
+        os.path.join(os.getcwd(), dockerfile),
+        "-t",
+        os.path.join(image_registry, f"{image_name}:{tag}"),
+        "--build-arg=BRANCH_NAME=" + branch_name,
+    ]
     if build_tool == BuildTool.podman.value and build_format == "docker":
-        cmd = [
-            build_tool,
-            "build",
-            "-f",
-            os.path.join(os.getcwd(), dockerfile),
-            "-t",
-            os.path.join(image_registry, f"{image_name}:{tag}"),
-            "--format",
-            "docker",
-            "--build-arg=BRANCH_NAME=" + branch_name,
-            ".",
-        ]
-    else:
-        cmd = [
-            build_tool,
-            "build",
-            "-f",
-            os.path.join(os.getcwd(), dockerfile),
-            "-t",
-            os.path.join(image_registry, f"{image_name}:{tag}"),
-            "--build-arg=BRANCH_NAME=" + branch_name,
-            ".",
-        ]
+        cmd += ["--format", "docker"]
+    cmd += ['.'] # Since this always has to be at the nd
     for env_var in build_envs:
         cmd.extend(["--env", env_var])
 
