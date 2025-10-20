@@ -69,12 +69,11 @@ def gen_tag(
     container_registry: str,
     dagster_version: str,
     use_az_login: bool,
-    build_tool: Literal["podman", "docker", "auto"] = "podman",
     use_sudo: bool = False,
 ) -> str:
     """Identifies the latest tag present in the container registry and increments it by one."""
     if use_az_login:
-        login_registry(container_registry, build_tool=build_tool, use_sudo=use_sudo)
+        login_registry(container_registry, use_sudo=use_sudo)
 
     res = run_cli_command(
         f"{'sudo ' if use_sudo else ''}{BuildTool.podman.value} search {os.path.join(container_registry, deployment_name)} --list-tags --format {{{{.Tag}}}} --limit 9999999",
@@ -139,14 +138,13 @@ def get_azure_access_token(image_registry: str) -> bytes:
 
 def login_registry(
     image_registry: str,
-    build_tool: Literal["podman", "docker", "auto"] = "podman",
     use_sudo: bool = False,
 ) -> None:
     """Logs into registry with az cli"""
     typer.echo(f"Logging into acr with {BuildTool.podman.value}...")
     token = get_azure_access_token(image_registry)
     cmd = [
-        f"{build_tool}",
+        BuildTool.podman.value,
         "login",
         "--username",
         "00000000-0000-0000-0000-000000000000",
@@ -213,10 +211,10 @@ def build_and_push(
     exception_on_failed_subprocess(subprocess.run(cmd, capture_output=False))
 
     if use_az_login:
-        login_registry(image_registry=image_registry, build_tool=build_tool, use_sudo=use_sudo)
+        login_registry(image_registry=image_registry, use_sudo=use_sudo)
 
     typer.echo("Pushing image...")
-    cmd = [build_tool, "push", os.path.join(image_registry, f"{image_name}:{tag}")]
+    cmd = [BuildTool.podman.value, "push", os.path.join(image_registry, f"{image_name}:{tag}")]
     if use_sudo:
         cmd = ["sudo"] + cmd
     exception_on_failed_subprocess(subprocess.run(cmd, capture_output=False))
