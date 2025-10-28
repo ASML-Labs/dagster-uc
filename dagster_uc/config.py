@@ -14,12 +14,12 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-
 OVERRIDE_CONFIG_FILE_PATH: str | None = None
 DEFAULT_CONFIG_FILE_PATH = ".config_user_code_deployments.yaml"
 
 
 def get_config_file_path():
+    """Gets config file path in this order, manual input from cli -> env var -> default"""
     if OVERRIDE_CONFIG_FILE_PATH is None:
         return os.environ.get("CONFIG_FILE_PATH", DEFAULT_CONFIG_FILE_PATH)
     else:
