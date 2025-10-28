@@ -1,14 +1,10 @@
-#!/usr/bin/env python3
-# ruff: noqa: D103
 from __future__ import annotations
 
 import contextlib
-import json
 import logging
 import os
 import pprint
 import time
-from dataclasses import asdict
 from typing import Annotated, cast
 
 import kr8s
@@ -17,7 +13,7 @@ from kr8s.objects import (
     Pod,
 )
 
-from dagster_uc.config import UserCodeDeploymentsConfig, load_config
+from dagster_uc.config import DagsterUserCodeConfiguration, load_config
 from dagster_uc.log import logger
 from dagster_uc.uc_handler import DagsterUserCodeHandler
 from dagster_uc.utils import (
@@ -46,7 +42,7 @@ deployment_check_app = typer.Typer(
 deployment_app.add_typer(deployment_check_app)
 
 handler: DagsterUserCodeHandler
-config: UserCodeDeploymentsConfig
+config: DagsterUserCodeConfiguration
 
 
 @app.command("show-config", help="Outputs the configuration that is currently in use")
@@ -81,7 +77,10 @@ def default(
         if verbose:
             config.verbose = True
         logger.debug(f"Switching kubernetes context to {config.environment}...")
-        kr8s_api = kr8s.api(context=f"{config.kubernetes_context}", namespace=config.namespace)
+        kr8s_api = kr8s.api(
+            context=f"{config.kubernetes_config.context}",
+            namespace=config.kubernetes_config.namespace,
+        )
 
         handler = DagsterUserCodeHandler(config, kr8s_api)
         handler.maybe_create_user_deployments_configmap()
@@ -92,7 +91,7 @@ def build_push_container(
     deployment_name: str,
     branch_name: str,
     image_prefix: str | None,
-    config: UserCodeDeploymentsConfig,
+    config: DagsterUserCodeConfiguration,
     use_sudo: bool,
     tag: str,
 ) -> None:
@@ -100,106 +99,18 @@ def build_push_container(
     handler.update_dagster_workspace_yaml()
     build_and_push(
         config.repository_root,
-        config.container_registry,
+        config.docker_config.container_registry,
         image_name=deployment_name
         if not image_prefix
         else os.path.join(image_prefix, deployment_name),
-        dockerfile=config.dockerfile,
+        dockerfile=config.docker_config.dockerfile,
         use_sudo=use_sudo,
         tag=tag,
         branch_name=branch_name,
-        use_az_login=config.use_az_login,
-        build_envs=config.docker_env_vars if config.docker_env_vars is not None else [],
-        build_format=config.build_format,
+        use_az_login=config.docker_config.use_az_login,
+        build_envs=config.docker_config.docker_env_vars,
+        build_format=config.docker_config.build_format,
     )
-
-
-@app.command(
-    name="init-config",
-    help="Create a config for dagster deployment",
-    no_args_is_help=True,
-)
-def init_config(
-    file: Annotated[
-        str,
-        typer.Option(
-            "--file",
-            "-f",
-            help="File and path where to save the config example.",
-        ),
-    ],
-):
-    """Initiates a config template"""
-
-    def optional_prompt(text: str) -> str | None:
-        var = typer.prompt(text, default="")
-        if var:
-            return var
-        else:
-            return None
-
-    initialized_config = UserCodeDeploymentsConfig(
-        environment=typer.prompt("""What environment is this config for [dev, acc, prod etc.]"""),
-        container_registry=typer.prompt("Container registry address"),
-        container_registry_chart_path=optional_prompt(
-            "Relative helm chart path of the previously provided container registry",
-        ),
-        dockerfile=typer.prompt("Path of dockerfile", default="./Dockerfile"),
-        image_prefix=typer.prompt("Prefix for container image to use"),
-        namespace=typer.prompt("Namespace of kubernetes deployment"),
-        node=typer.prompt("Kubernetes node for user-code pod"),
-        code_path=typer.prompt("Path of the Definitions python file inside docker image"),
-        docker_root=typer.prompt("Path of docker scope", default="."),
-        repository_root=typer.prompt("Path of project scope", default="."),
-        dagster_version=typer.prompt(
-            "Version of dagster in project (should mirror dagster depoyment!)",
-        ),
-        docker_env_vars=[],
-        user_code_deployment_env_secrets=[],
-        user_code_deployment_env=[],
-        cicd=typer.confirm(
-            "Whether it's executed in CICD. If set to True, then the deployment_name is created from the env",
-        ),
-        requests=json.loads(
-            typer.prompt(
-                "Request for the user pod in k8s in json formatted string",
-                default=json.dumps({"cpu": "1", "memory": "1Gi"}),
-            ),
-        ),
-        limits=json.loads(
-            typer.prompt(
-                "Limits for the user pod in k8s in json formatted string",
-                default=json.dumps({"cpu": "2", "memory": "2Gi"}),
-            ),
-        ),
-        image_pull_secrets=[],
-        kubernetes_context=typer.prompt("Kubernetes context of the cluster to use for api calls"),
-        dagster_gui_url=optional_prompt("URL of dagster UI"),
-        use_latest_chart_version=typer.confirm(
-            "Whether to use latest chart version, if disabled will always use the config dagster version",
-        ),
-        use_az_login=typer.confirm(
-            "Whether to use az cli to login to container registry with podman, and helm if oci charts are used.",
-        ),
-        use_project_name=typer.confirm(
-            "Whether to use the pyproject.toml project-name as deployment name prefix.",
-        ),
-        user_code_deployments_configmap_name=typer.prompt(
-            "Configmap name to use for user_code_deployments",
-            default="dagster-user-deployments-values-yaml",
-        ),
-        dagster_workspace_yaml_configmap_name=typer.prompt(
-            "Configmap name of the dagster_workspace_yaml",
-            default="dagster-workspace-yaml",
-        ),
-    )
-    with open(file, "w") as fp:
-        import yaml
-
-        config_dict = asdict(initialized_config)
-        complete_dict = {config_dict["environment"]: config_dict}
-        yaml.dump(complete_dict, fp, default_flow_style=False)
-    typer.echo(f"Template configuration file generated as '{file}'.")
 
 
 @deployment_app.command(
@@ -236,7 +147,7 @@ def deployment_revive(
         handler.add_user_deployment_to_configmap(
             handler.gen_new_deployment_yaml(
                 name,
-                image_prefix=handler.config.image_prefix,
+                image_prefix=handler.config.docker_config.image_prefix,
                 tag=tag,
             ),
         )
@@ -329,7 +240,7 @@ def check_deployment(
     for pod in handler.api.get(
         Pod,
         label_selector=f"deployment={name}",
-        namespace=config.namespace,
+        namespace=config.kubernetes_config.namespace,
     ):
         pod = cast(Pod, pod)
         with contextlib.suppress(Exception):
@@ -423,11 +334,11 @@ def deployment_deploy(
         logger.debug("Determining tag...")
         new_tag = gen_tag(
             deployment_name
-            if not config.image_prefix
-            else os.path.join(config.image_prefix, deployment_name),
-            config.container_registry,
+            if not config.docker_config.image_prefix
+            else os.path.join(config.docker_config.image_prefix, deployment_name),
+            config.docker_config.container_registry,
             config.dagster_version,
-            config.use_az_login,
+            config.docker_config.use_az_login,
             use_sudo=use_sudo,
         )
 
@@ -438,7 +349,7 @@ def deployment_deploy(
             build_push_container(
                 deployment_name,
                 branch_name=branch_name,
-                image_prefix=handler.config.image_prefix,
+                image_prefix=handler.config.docker_config.image_prefix,
                 config=config,
                 use_sudo=use_sudo,
                 tag=new_tag,
@@ -451,7 +362,7 @@ def deployment_deploy(
             handler.add_user_deployment_to_configmap(
                 handler.gen_new_deployment_yaml(
                     deployment_name,
-                    image_prefix=handler.config.image_prefix,
+                    image_prefix=handler.config.docker_config.image_prefix,
                     tag=new_tag,
                 ),
             )
@@ -465,7 +376,7 @@ def deployment_deploy(
             handler.add_user_deployment_to_configmap(
                 handler.gen_new_deployment_yaml(
                     deployment_name,
-                    image_prefix=handler.config.image_prefix,
+                    image_prefix=handler.config.docker_config.image_prefix,
                     tag=new_tag,
                 ),
             )
@@ -495,7 +406,7 @@ def deployment_deploy(
             handler.api.get(
                 Pod,
                 label_selector=f"deployment={deployment_name}",
-                namespace=config.namespace,
+                namespace=config.kubernetes_config.namespace,
             ),
         )
         if len(code_pods) == 0:

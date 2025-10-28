@@ -24,6 +24,7 @@ dependencies = [
     "pytz",
     "pydantic>=2",
     "packaging>=25.0",
+    "pydantic-settings>=2",
 ]
 
 [tool.uv]

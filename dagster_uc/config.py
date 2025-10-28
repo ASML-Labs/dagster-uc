@@ -1,89 +1,210 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, fields
-from typing import Literal
+from copy import deepcopy
+from pathlib import Path
+from string import Template
+from typing import Any, Literal
 
-import yaml
+from pydantic import BaseModel, Field
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
 
-from dagster_uc.log import logger
+
+OVERRIDE_CONFIG_FILE_PATH: str | None = None
+DEFAULT_CONFIG_FILE_PATH = ".config_user_code_deployments.yaml"
 
 
-@dataclass
-class UserCodeDeploymentsConfig:
-    """This is a data class that holds the configuration parameters necessary
-    for running the user code deployment script.
+def get_config_file_path():
+    if OVERRIDE_CONFIG_FILE_PATH is None:
+        return os.environ.get("CONFIG_FILE_PATH", DEFAULT_CONFIG_FILE_PATH)
+    else:
+        return OVERRIDE_CONFIG_FILE_PATH
+
+
+class KubernetesResource(BaseModel):
+    """Kubernetes resources"""
+
+    cpu: str | int
+    memory: str | int
+
+
+class KubernetesSecret(BaseModel):
+    """Kubernetes secret"""
+
+    name: str
+
+
+class KubernetesEnvVar(BaseModel):
+    """Kubernetes env var"""
+
+    name: str
+    value: str
+
+
+def deep_merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge dict `b` into `a`."""
+    result = deepcopy(a)
+    for key, value in b.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+# class DeferredYamlConfigSettingsSource(YamlConfigSettingsSource):
+#     """YAML config settings source that can reload config files later."""
+
+
+class EnvParsedYamlConfigSettingsSource(YamlConfigSettingsSource):
+    """Yaml Settings Source that parses envVar references before loading. Also selects the env subset based one the environment.
+    And merges the defaults in as well.
+
+    ENV VARS need to be configured like this: ${ENV_VAR}
+
+    An example of a valid config.yaml would be:
+        ```yaml
+        defaults:
+            var: "foo"
+
+        dev:
+            var: "${env_var}"
+        acc:
+            var2: "bar"
+        ```
     """
 
-    environment: str
+    def _read_file(self, file_path: Path) -> dict[str, Any]:
+        import json
+
+        data = super()._read_file(file_path)
+
+        environment = os.environ.get("ENVIRONMENT", "dev")
+
+        # get based on environment
+        environment_data = data.get(environment, {})
+        defaults_data = data.get("defaults", {})
+        combined_data = deep_merge(defaults_data, environment_data)
+
+        data = json.dumps(combined_data)
+        data = Template(data).substitute(os.environ)
+        return json.loads(data)
+
+
+class _BaseSettingsWithYaml(BaseSettings):
+    model_config = SettingsConfigDict(
+        extra="ignore",
+    )
+
+    @classmethod
+    def settings_customise_sources(  # noqa: D102
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,  # noqa: ARG003
+        env_settings: PydanticBaseSettingsSource,  # noqa: ARG003
+        dotenv_settings: PydanticBaseSettingsSource,  # noqa: ARG003
+        file_secret_settings: PydanticBaseSettingsSource,  # noqa: ARG003
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (EnvParsedYamlConfigSettingsSource(settings_cls, yaml_file=get_config_file_path()),)
+
+
+class DockerConfiguration(_BaseSettingsWithYaml):
+    """Configuration specific for Docker or Container registry related."""
+
     container_registry: str
     dockerfile: str
-    image_prefix: str
-    namespace: str
-    node: str
-    code_path: str
-    docker_root: str
-    repository_root: str
-    dagster_version: str
-    image_pull_secrets: list[
-        dict[str, str]
-    ]  # Must be list of dicts with key 'name' like so: [{"name": "sp-credentials"}, {"name": "lakefs-credentials"}]
-    user_code_deployment_env_secrets: list[
-        dict[str, str]
-    ]  # Must be list of dicts with key 'name' like so: [{"name": "sp-credentials"}, {"name": "lakefs-credentials"}]
-    user_code_deployment_env: list[
-        dict[str, str]
-    ]  # Must be list of dicts with keys 'name' and 'value' like so: [{"name": "MY_ENV_VAR", "value": "True"}, ...]
-    cicd: bool
-    limits: dict[str, str]
-    requests: dict[str, str]
-    kubernetes_context: str
-    docker_env_vars: list[str]
-    dagster_gui_url: str | None = None
-    verbose: bool = False
-    use_az_login: bool = True
-    use_project_name: bool = True
-    use_latest_chart_version: bool = False
-    container_registry_chart_path: str | None = None
-    helm_disable_openapi_validation: bool = False
-    helm_skip_schema_validation: bool = False
-    helm_create_new_namespace: bool = True
-    user_code_deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
-    dagster_workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
-    uc_deployment_semaphore_name: str = "dagster-uc-semaphore"
-    uc_release_name: str = "dagster-user-code"
+    docker_root: str = Field(default="")
+    docker_env_vars: list[str] = Field(default=[])
+    image_prefix: str = Field(default="")
+    use_az_login: bool = Field(default=True)
+    container_registry_chart_path: str | None = Field(default=None)
     build_format: Literal["OCI", "docker"] = "OCI"
 
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        yaml_config_section="docker",
+    )
 
-def load_config(environment: str, path: str | None) -> UserCodeDeploymentsConfig:
+
+class HelmConfiguration(_BaseSettingsWithYaml):
+    """Helm specific configuration"""
+
+    disable_openapi_validation: bool = Field(default=False)
+    skip_schema_validation: bool = Field(default=False)
+    create_new_namespace: bool = Field(default=True)
+
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        yaml_config_section="helm",
+    )
+
+
+class KubernetesConfiguration(_BaseSettingsWithYaml):
+    """Kubernetes specific configuration."""
+
+    context: str
+    namespace: str
+    node: str
+    image_pull_secrets: list[KubernetesSecret] = Field(default=[])
+    user_code_deployment_env_secrets: list[KubernetesSecret] = Field(default=[])
+    user_code_deployment_env: list[KubernetesEnvVar] = Field(default=[])
+    limits: KubernetesResource | None = Field(default=None)
+    requests: KubernetesResource | None = Field(default=None)
+
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        yaml_config_section="kubernetes",
+    )
+
+
+class DagsterUserCodeChartConfiguration(_BaseSettingsWithYaml):
+    """User code chart configuration"""
+
+    deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
+    workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
+    deployment_semaphore_name: str = "dagster-uc-semaphore"
+    release_name: str = "dagster-user-code"
+
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        yaml_config_section="chart",
+    )
+
+
+class DagsterUserCodeConfiguration(_BaseSettingsWithYaml):
+    """Dagster User Code configuration"""
+
+    # Environment/code config
+    repository_root: str = Field(default="")
+    environment: str
+    code_path: str
+    dagster_version: str
+    cicd: bool = Field(default=False)
+    dagster_gui_url: str | None = Field(default=None)
+    verbose: bool = Field(default=False)
+    use_project_name: bool = Field(default=True)
+    use_latest_chart_version: bool = False
+
+    docker_config: DockerConfiguration = Field(default_factory=DockerConfiguration)  # type: ignore
+    helm_config: HelmConfiguration = Field(default_factory=HelmConfiguration)
+    kubernetes_config: KubernetesConfiguration = Field(
+        default_factory=KubernetesConfiguration,  # type: ignore
+    )
+    dagster_chart_config: DagsterUserCodeChartConfiguration = Field(
+        default_factory=DagsterUserCodeChartConfiguration,
+    )
+
+
+def load_config(environment: str, path: str | None = None) -> DagsterUserCodeConfiguration:
     """Loads the configuration file from the local dir or the user's home dir."""
-    if path is None:
-        paths_to_try = [
-            ".config_user_code_deployments.yaml",
-            "~/.config_user_code_deployments.yaml",
-        ]
-        for path_to_try in paths_to_try:
-            path_to_try = os.path.expanduser(path_to_try)
-            if os.path.exists(path_to_try):
-                path = path_to_try
-        if path is None:
-            raise Exception(
-                f"Could not load config file. Tried the following locations: {paths_to_try}\nCurrent folder: {os.getcwd()}\nContents of current folder: {os.listdir(os.getcwd())}\n\n Tip: Place the config file in the same folder you're calling this script from, or your home directory, or specify the path manually using --config-file <path>",
-            )
+    os.environ["ENVIRONMENT"] = environment
+    global OVERRIDE_CONFIG_FILE_PATH
+    if path is not None:
+        OVERRIDE_CONFIG_FILE_PATH = path
 
-    with open(path) as stream:
-        raw_yaml = yaml.safe_load(stream)
-        if environment not in raw_yaml:
-            raise Exception(
-                f"Environment '{environment}' not specified in configuration file at '{path}'",
-            )
-        environment_data = raw_yaml[environment]
-        defaults_data = raw_yaml["defaults"]
-        combined_data = {**defaults_data, **environment_data}
-
-    for field in fields(UserCodeDeploymentsConfig):
-        if os.environ.get(field.name.upper(), None) is not None:
-            combined_data[field.name] = os.environ[field.name.upper()]
-
-    logger.debug(f"Using configuration:\n {combined_data}")
-    return UserCodeDeploymentsConfig(**combined_data)
+    return DagsterUserCodeConfiguration()  # type: ignore
