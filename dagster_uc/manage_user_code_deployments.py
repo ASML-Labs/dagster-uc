@@ -6,14 +6,21 @@ import os
 import pprint
 import time
 from typing import Annotated, cast
-
+import json
+from typing_extensions import no_type_check
 import kr8s
 import typer
 from kr8s.objects import (
     Pod,
 )
 
-from dagster_uc.config import DagsterUserCodeConfiguration, load_config
+from dagster_uc.config import (
+    DagsterUserCodeChartConfiguration,
+    DagsterUserCodeConfiguration,
+    DockerConfiguration,
+    KubernetesConfiguration,
+    load_config,
+)
 from dagster_uc.log import logger
 from dagster_uc.uc_handler import DagsterUserCodeHandler
 from dagster_uc.utils import (
@@ -51,6 +58,97 @@ def show_config():
     pprint.pprint(config, indent=4)
 
 
+@app.command(
+    name="init-config",
+    help="Create a config for dagster deployment",
+    no_args_is_help=True,
+)
+def init_config(
+    file: Annotated[
+        str,
+        typer.Option(
+            "--file",
+            "-f",
+            help="File and path where to save the config example.",
+        ),
+    ],
+):
+    """Initiates a config template"""
+
+    def optional_prompt(text: str) -> str | None:
+        var = typer.prompt(text, default="")
+        if var:
+            return var
+        else:
+            return None
+
+    initialized_config = DagsterUserCodeConfiguration.model_construct(
+        environment=typer.prompt("""What environment is this config for [dev, acc, prod etc.]"""),
+        code_path=typer.prompt("Path of the Definitions python file inside docker image"),
+        repository_root=typer.prompt("Path of project scope", default="."),
+        dagster_version=typer.prompt(
+            "Version of dagster in project (should mirror dagster depoyment!)",
+        ),
+        cicd=typer.confirm(
+            "Whether it's executed in CICD. If set to True, then the deployment_name is created from the env",
+        ),
+        dagster_gui_url=optional_prompt("URL of dagster UI"),
+        use_latest_chart_version=typer.confirm(
+            "Whether to use latest chart version, if disabled will always use the config dagster version",
+        ),
+        use_project_name=typer.confirm(
+            "Whether to use the pyproject.toml project-name as deployment name prefix.",
+        ),
+        docker=DockerConfiguration(
+            docker_root=typer.prompt("Path of docker scope", default="."),
+            dockerfile=typer.prompt("Path of dockerfile", default="./Dockerfile"),
+            image_prefix=typer.prompt("Prefix for container image to use"),
+            container_registry=typer.prompt("Container registry address"),
+            container_registry_chart_path=optional_prompt(
+                "Relative helm chart path of the previously provided container registry",
+            ),
+            use_az_login=typer.confirm(
+                "Whether to use az cli to login to container registry with podman, and helm if oci charts are used.",
+            ),
+        ),
+        kubernetes=KubernetesConfiguration(
+            context=typer.prompt("Kubernetes context of the cluster to use for api calls"),
+            namespace=typer.prompt("Namespace of kubernetes deployment"),
+            node=typer.prompt("Kubernetes node for user-code pod"),
+            requests=json.loads(
+                typer.prompt(
+                    "Request for the user pod in k8s in json formatted string",
+                    default=json.dumps({"cpu": "1", "memory": "1Gi"}),
+                ),
+            ),
+            limits=json.loads(
+                typer.prompt(
+                    "Limits for the user pod in k8s in json formatted string",
+                    default=json.dumps({"cpu": "2", "memory": "2Gi"}),
+                ),
+            ),
+        ),
+        chart=DagsterUserCodeChartConfiguration(
+            deployments_configmap_name=typer.prompt(
+                "Configmap name to use for user_code_deployments",
+                default="dagster-user-deployments-values-yaml",
+            ),
+            workspace_yaml_configmap_name=typer.prompt(
+                "Configmap name of the dagster_workspace_yaml",
+                default="dagster-workspace-yaml",
+            ),
+        ),
+    )
+
+    with open(file, "w") as fp:
+        import yaml
+
+        config_dict = initialized_config.model_dump(by_alias=True)
+        complete_dict = {config_dict["environment"]: config_dict}
+        yaml.dump(complete_dict, fp, default_flow_style=False, sort_keys=False)
+    typer.echo(f"Template configuration file generated as '{file}'.")
+
+
 @app.callback(invoke_without_command=True, no_args_is_help=True)
 def default(
     ctx: typer.Context,
@@ -68,12 +166,12 @@ def default(
     global config
     global handler
 
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-    config = load_config(environment, config_file_path)
-
     if ctx.invoked_subcommand == "init-config":
         pass
     else:
+        logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+        config = load_config(environment, config_file_path)
+
         if verbose:
             config.verbose = True
         logger.debug(f"Switching kubernetes context to {config.environment}...")

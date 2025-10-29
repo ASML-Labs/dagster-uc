@@ -13,6 +13,7 @@ from pydantic_settings import (
     SettingsConfigDict,
     YamlConfigSettingsSource,
 )
+from dagster_uc.log import logger
 
 OVERRIDE_CONFIG_FILE_PATH: str | None = None
 DEFAULT_CONFIG_FILE_PATH = ".config_user_code_deployments.yaml"
@@ -57,10 +58,6 @@ def deep_merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-# class DeferredYamlConfigSettingsSource(YamlConfigSettingsSource):
-#     """YAML config settings source that can reload config files later."""
-
-
 class EnvParsedYamlConfigSettingsSource(YamlConfigSettingsSource):
     """Yaml Settings Source that parses envVar references before loading. Also selects the env subset based one the environment.
     And merges the defaults in as well.
@@ -87,7 +84,12 @@ class EnvParsedYamlConfigSettingsSource(YamlConfigSettingsSource):
         environment = os.environ.get("ENVIRONMENT", "dev")
 
         # get based on environment
-        environment_data = data.get(environment, {})
+        environment_data = data.get(environment)
+
+        if environment_data is None:
+            logger.warning("Didn't find environment %s in config yaml", environment)
+            environment_data = {}
+
         defaults_data = data.get("defaults", {})
         combined_data = deep_merge(defaults_data, environment_data)
 
@@ -113,7 +115,7 @@ class _BaseSettingsWithYaml(BaseSettings):
         return (EnvParsedYamlConfigSettingsSource(settings_cls, yaml_file=get_config_file_path()),)
 
 
-class DockerConfiguration(_BaseSettingsWithYaml):
+class DockerConfiguration(BaseModel):
     """Configuration specific for Docker or Container registry related."""
 
     container_registry: str
@@ -125,26 +127,16 @@ class DockerConfiguration(_BaseSettingsWithYaml):
     container_registry_chart_path: str | None = Field(default=None)
     build_format: Literal["OCI", "docker"] = "OCI"
 
-    model_config = SettingsConfigDict(
-        extra="ignore",
-        yaml_config_section="docker",
-    )
 
-
-class HelmConfiguration(_BaseSettingsWithYaml):
+class HelmConfiguration(BaseModel):
     """Helm specific configuration"""
 
     disable_openapi_validation: bool = Field(default=False)
     skip_schema_validation: bool = Field(default=False)
     create_new_namespace: bool = Field(default=True)
 
-    model_config = SettingsConfigDict(
-        extra="ignore",
-        yaml_config_section="helm",
-    )
 
-
-class KubernetesConfiguration(_BaseSettingsWithYaml):
+class KubernetesConfiguration(BaseModel):
     """Kubernetes specific configuration."""
 
     context: str
@@ -156,24 +148,14 @@ class KubernetesConfiguration(_BaseSettingsWithYaml):
     limits: KubernetesResource | None = Field(default=None)
     requests: KubernetesResource | None = Field(default=None)
 
-    model_config = SettingsConfigDict(
-        extra="ignore",
-        yaml_config_section="kubernetes",
-    )
 
-
-class DagsterUserCodeChartConfiguration(_BaseSettingsWithYaml):
+class DagsterUserCodeChartConfiguration(BaseModel):
     """User code chart configuration"""
 
     deployments_configmap_name: str = "dagster-user-deployments-values-yaml"
     workspace_yaml_configmap_name: str = "dagster-workspace-yaml"
     deployment_semaphore_name: str = "dagster-uc-semaphore"
     release_name: str = "dagster-user-code"
-
-    model_config = SettingsConfigDict(
-        extra="ignore",
-        yaml_config_section="chart",
-    )
 
 
 class DagsterUserCodeConfiguration(_BaseSettingsWithYaml):
@@ -190,13 +172,14 @@ class DagsterUserCodeConfiguration(_BaseSettingsWithYaml):
     use_project_name: bool = Field(default=True)
     use_latest_chart_version: bool = False
 
-    docker_config: DockerConfiguration = Field(default_factory=DockerConfiguration)  # type: ignore
-    helm_config: HelmConfiguration = Field(default_factory=HelmConfiguration)
+    docker_config: DockerConfiguration = Field(default_factory=DockerConfiguration, alias="docker")  # type: ignore
+    helm_config: HelmConfiguration = Field(default_factory=HelmConfiguration, alias="helm")
     kubernetes_config: KubernetesConfiguration = Field(
         default_factory=KubernetesConfiguration,  # type: ignore
+        alias="kubernetes",
     )
     dagster_chart_config: DagsterUserCodeChartConfiguration = Field(
-        default_factory=DagsterUserCodeChartConfiguration,
+        default_factory=DagsterUserCodeChartConfiguration, alias="chart"
     )
 
 
