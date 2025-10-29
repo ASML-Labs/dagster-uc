@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import pprint
 import time
 from typing import Annotated, cast
-import json
-from typing_extensions import no_type_check
+
 import kr8s
 import typer
 from kr8s.objects import (
@@ -236,6 +236,7 @@ def deployment_revive(
     ],
     tag: Annotated[str, typer.Option("--tag", "-t", help="The tag of the deployment to revive.")],
 ):
+    """Revives an old deployment from the container registry."""
     # In case the UI name separator of the deployment is passed
     name = name.replace(":", "--")
 
@@ -282,6 +283,7 @@ def deployment_delete(
         ),
     ] = None,
 ) -> None:
+    """Delete a registered user-code deployment from kubernetes."""
     if delete_all:
         handler.remove_all_deployments()
         handler.deploy_to_k8s(reload_dagster=True)
@@ -401,6 +403,7 @@ def deployment_deploy(
         ),
     ] = False,
 ):
+    """Handles deployment to kubernetes cluster."""
     handler._ensure_dagster_version_match()
 
     count = 0

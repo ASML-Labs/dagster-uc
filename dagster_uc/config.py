@@ -13,13 +13,14 @@ from pydantic_settings import (
     SettingsConfigDict,
     YamlConfigSettingsSource,
 )
+
 from dagster_uc.log import logger
 
 OVERRIDE_CONFIG_FILE_PATH: str | None = None
 DEFAULT_CONFIG_FILE_PATH = ".config_user_code_deployments.yaml"
 
 
-def get_config_file_path():
+def get_config_file_path() -> str:
     """Gets config file path in this order, manual input from cli -> env var -> default"""
     if OVERRIDE_CONFIG_FILE_PATH is None:
         return os.environ.get("CONFIG_FILE_PATH", DEFAULT_CONFIG_FILE_PATH)
@@ -179,7 +180,8 @@ class DagsterUserCodeConfiguration(_BaseSettingsWithYaml):
         alias="kubernetes",
     )
     dagster_chart_config: DagsterUserCodeChartConfiguration = Field(
-        default_factory=DagsterUserCodeChartConfiguration, alias="chart"
+        default_factory=DagsterUserCodeChartConfiguration,
+        alias="chart",
     )
 
 

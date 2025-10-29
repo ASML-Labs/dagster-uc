@@ -1,9 +1,10 @@
 import pytest
+
 from dagster_uc.config import load_config
 
 
 @pytest.mark.parametrize(
-    "environment, expected",
+    ("environment", "expected"),
     [
         (
             "dev",
@@ -103,7 +104,7 @@ from dagster_uc.config import load_config
         ),
     ],
 )
-def test_load_config(environment: str, expected: dict):
+def test_load_config(environment: str, expected: dict):  # noqa
     dev_config = load_config(environment, path="tests/config/.config_user_code_deployments.yaml")
 
     assert dev_config.model_dump() == expected
