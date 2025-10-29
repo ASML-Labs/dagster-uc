@@ -1,136 +1,173 @@
-
 # Introduction
 
 This experimental CLI allows you to manage user code deployments for a Dagster instance deployed on Kubernetes. It packages your code branch into a Docker container, uploads it to your container registry, and updates your existing Dagster instance to enable your user code deployment.
 
 # Pre-requisites
 
-* Kubectl with a valid config
-* Helm3
+* kubectl with a valid config
+* Helm 3
 * Podman
-* Python3.10+
-* AZ CLI (if you are on azure)
+* Python 3.10+
+* Azure CLI (if you are using Azure container registry and `use_az_login`)
 
 # Installation
 
-* `pip install dagster-uc`
-* Create a configuration file named `.config_user_code_deployments.yaml` in the root of your repository or your home directory. You can also create one by running `dagster-uc init-config -f '.config_user_code_deployments.yaml'`.
+* Install from PyPI:
+  ```
+  pip install dagster-uc
+  ```
 
-```yaml
-dev:
-  cicd: false
-  code_path: dagster_pipelines/repo.py
-  image_prefix: 'team-alpha'
-  container_registry: myacr.azurecr.io
-  dagster_gui_url: null
-  dagster_version: 1.8.4
-  docker_root: .
-  dockerfile: ./Dockerfile
-  docker_env_vars:
-    - "VAR=SECRET"
-    - "RANDOM_VAR_IN_CURRENT_ENV"
-  environment: dev
-  kubernetes_context: "my-kubernetes-context"
-  namespace: dagster-dev
-  limits:
-    cpu: '2'
-    memory: 2Gi
-  node: small
-  repository_root: .
-  requests:
-    cpu: '1'
-    memory: 1Gi
-  use_project_name: true
-  use_az_login: false
-  user_code_deployment_env:
-    - name: ON_K8S
-      value: 'True'
-    - name: ENVIRONMENT
-      value: dev
-  user_code_deployment_env_secrets:
-    - name: my-env-secret
-  user_code_deployments_configmap_name: dagster-user-deployments-values-yaml
-  dagster_workspace_yaml_configmap_name: dagster-workspace-yaml
-  uc_deployment_semaphore_name: dagster-uc-semaphore
-  verbose: false
-```
+* Create a configuration file named `.config_user_code_deployments.yaml` in the root of your repository or in your home directory.
+  You can also create one by running:
+  ```
+  dagster-uc init-config -f '.config_user_code_deployments.yaml'
+  ```
 
-# Instructions
+# Configuration (nested structure)
 
-* To deploy the currently checked out Git branch, run `dagster-uc deployment deploy`.
-* To see all possible commands, run `dagster-uc --help`
+The configuration format is now nested and grouped by concerns (e.g. `docker`, `kubernetes`, `helm`). The top-level keys you will commonly use are:
 
-## Environment Configuration
+* `defaults` — values applied to every environment unless overridden.
+* Per-environment sections (e.g. `dev`, `acc`, `prd`) — environment-specific overrides.
+* `docker` — Docker/build related settings (dockerfile, registry, image prefix, build env vars, etc).
+* `kubernetes` — Kubernetes-specific settings (context, namespace, resource requests/limits, env and secret lists).
+* `helm` — Helm-related settings (for example, skip schema validation).
+* `chart` — chart-specific values you may want to supply into the user-deployments Helm chart.
+* `use_latest_chart_version` and `use_project_name` — deployment behavior flags.
 
-Dagster-uc allows you to have specific user-code deployment configurations per environment. This enables different configurations for your Kubernetes cluster, container registry, resource usage, etc.
+Order of loading configuration:
+1. `defaults`
+2. environment-specific keys (e.g. `dev`)
+3. environment variable overrides
 
-The default environment used is `dev`, so you need to have `dev` in your configuration file. Other environment names are up to you. An example structure:
-
-```yaml
-dev:
-  container_registry: dev-project.azurecr.io
-  ...
-acc:
-  container_registry: acc-project.azurecr.io.
-  ...
-prd:
-  container_registry: prd-project.azurecr.io
-  ...
-```
-
-Specify the environment with `dagster-uc --environment prd deployment deploy`, or `dagster-uc -e prd deployment deploy` to use the prd config for the deployment.
-
-### Settings defaults
-
-Defaults can be specified for all environments, every key that can be set in the main config can be defined in the defaults. Order of loading config, is defaults -> environment config -> environment variable override.
+Below is an example config that mirrors the new nested structure:
 
 ```yaml
 defaults:
   repository_root: "."
-  docker_root: "."
-  dockerfile: "docker/dev/Dockerfile"
-  image_prefix: 'team-alpha'
+  code_path: example/repo.py
+  dagster_version: 1.11.16
+  cicd: false
+  use_project_name: True
+  use_latest_chart_version: True
+
+  # Docker configuration (grouped under `docker`)
+  docker:
+    docker_root: "."
+    docker_env_vars:
+      - FOO
+      - FOO='string'
+    image_prefix: "example"
+    use_az_login: True
+    container_registry_chart_path: "helm/dagster/dagster-user-deployments"
+
+  # Helm configuration (grouped under `helm`)
+  helm:
+    skip_schema_validation: True
+
+  # Kubernetes configuration (grouped under `kubernetes`)
+  kubernetes:
+    namespace: dagster
+    node: cpunode
+    requests:
+      cpu: 150m
+      memory: 750Mi
+    limits:
+      cpu: 4000m
+      memory: 2000Mi
+    user_code_deployment_env_secrets:
+      - name: dagster-storage-secret
+
+  chart: {}
+
+dev:
+  environment: dev
+  dagster_gui_url: "http://dagster.dev"
+
+  docker:
+    dockerfile: "docker/dev.Dockerfile"
+    container_registry: dagster-uc.dev.acr.io
+
+  kubernetes:
+    context: "aks-dev"
+    user_code_deployment_env:
+      - name: ON_K8S
+        value: '1'
+      - name: ENVIRONMENT
+        value: dev
+
+acc:
+  environment: acc
+  dagster_gui_url: "http://dagster.acc"
+
+  docker:
+    dockerfile: "docker/acc.Dockerfile"
+    container_registry: dagster-uc.acc.acr.io
+
+  kubernetes:
+    context: "aks-acc"
+    user_code_deployment_env:
+      - name: ON_K8S
+        value: '1'
+      - name: ENVIRONMENT
+        value: acc
 ```
 
-### Overriding Config Settings Through Environment Variables
+Notes on common config keys (now nested):
+* `code_path` — path to the Python module that starts your Dagster definitions (used to start the user-code gRPC server).
+* `docker.dockerfile` — path to the Dockerfile to build the image.
+* `docker.container_registry` — target container registry for the built image (per-environment override).
+* `docker.image_prefix` — prefix used when naming images.
+* `docker.docker_env_vars` — list of environment variables to pass into the build process.
+* `docker.use_az_login` — set to `True` if you need to log in to Azure before pushing images.
+* `kubernetes.context` — the kube context to use for deployments in that environment.
+* `kubernetes.namespace` — the namespace where Dagster and user deployments live.
+* `kubernetes.requests` / `kubernetes.limits` — resource requests and limits for the user code deployment pod.
+* `kubernetes.user_code_deployment_env` — a list of name/value env objects to inject into the user-code deployment container.
+* `kubernetes.user_code_deployment_env_secrets` — a list of secrets to be mounted/injected as environment variables.
+* `helm.skip_schema_validation` — useful for older Helm chart setups or when schema validation causes issues.
+* `use_project_name` — when True, the project name from `pyproject.toml` is prefixed to the deployment name.
 
-It's possible to dynamically set different values for fields in one of the environment configurations, while loading the config. This can be achieved through environment variables, examples:
+### Overriding Config with Environment Variables
 
-* `export CICD=TRUE`
-* `export VERBOSE=TRUE`
+Environment variables can still be used to override configuration at load time but you need to scaffold them in the yaml using `cicd: ${CICD}`. You can export common flags (for example `CICD=TRUE` or `VERBOSE=TRUE`) to affect behavior — top-level boolean or string fields are typically overridden this way. If you need to override nested values in automation, set the environment variables your automation expects before running the CLI.
 
-## Branches
+# Usage
 
-Dagster-uc deploys a Git branch as a code location to Dagster. When `cicd: true` is set in the config_user_code_deployments.yaml, the deployment name of the code location is derived from the `environment` config variable.
+* Deploy the currently checked out Git branch:
+  ```
+  dagster-uc deployment deploy
+  ```
 
-If `cicd: false` the deployment name is derived from the Git branch. The branch name is transformed by replacing non-alphanumeric characters with hyphens and removing any leading or trailing hyphens.
+* See all available commands:
+  ```
+  dagster-uc --help
+  ```
 
-Example: Git branch `feat: my amazing feature` becomes deployment `feat-my-amazing-feature`
+# Branch naming and deployments
 
-### Multiple Deployments of the Same Branch
+* When `cicd: true` is set, the deployment name is derived from the `environment` value.
+* When `cicd: false`, the deployment name is derived from the Git branch name. The branch name is normalized by replacing non-alphanumeric characters with hyphens and stripping leading/trailing hyphens.
+  Example: `feat: my amazing feature` -> `feat-my-amazing-feature`
 
-During deployment, you can provide a `--deployment-name-suffix` to add a suffix to your deployment name. This is useful for testing by deploying the same branch twice with different configurations.
+* You can deploy the same branch multiple times by supplying `--deployment-name-suffix`, which appends a suffix to the deployment name.
 
-### Multi-Project Deployment in One Dagster Instance
+* When `use_project_name` is enabled, the internal deployment name will be prefixed by a project slug derived from your `pyproject.toml`. Internally the prefix separator is `--` so an example name may be `my-project--feat-a`, which appears in the Dagster UI as `project:branch`.
 
-With the `use_project_name` flag in the dagster-uc configuration file, you can prefix the project name to the user-code deployment. The project name is taken from the `pyproject.toml`, so you need to call dagster-uc in the same directory as the `.toml` file.
+# Building and container behavior
 
-For example, if the project name in `pyproject.toml` is `my_dummy_project`, the deployment name will be `my-dummy-project--feat-my-amazing-feature`.
+* The build process passes a `BRANCH_NAME` build-arg so your code can behave differently per branch (e.g. selecting secrets, configuration).
+* Images are versioned: the CLI will check the registry for existing tags and increment a version to avoid reusing tags that could break running jobs.
+* Use a registry lifecycle/garbage-collection policy to keep old images from accumulating.
 
-> **Important:** Internally the deployment name will use `--` to seperate the project and branch, which is visible on Kubernetes and the container registry. However in the dagster UI it appears as `project:branch`
+Example Dockerfile pattern:
 
-## Containers
-
-Dagster-uc creates a container image from your existing codebase during deployment.
-
-An example Dockerfile:
-
-```Dockerfile
+```
 FROM python:3.11-slim
 ARG BRANCH_NAME
 ARG DIR="APP"
 WORKDIR $DIR
-COPY my_project my_project # Contains all code
+COPY my_project my_project
 COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev --link-mode=copy
@@ -138,22 +175,25 @@ ENV PATH="/$DIR/.venv/bin:$PATH"
 ENV BRANCH_NAME=${BRANCH_NAME}
 ```
 
-Set `code_path` in the configuration to the path of the Python executable containing the Dagster definitions. This is used to start the gRPC server. For more details, see the [Dagster K8S docs](https://docs.dagster.io/guides/deploy/deployment-options/kubernetes/deploying-to-kubernetes).
+# Kubernetes / Helm
 
-Set `image_prefix` to prefix all the build images. Useful for grouping images under a prefix.
+* Make sure `kubernetes.context` can access the `kubernetes.namespace`.
+* Configure `kubernetes.requests` and `kubernetes.limits` for the user-code deployment pod appropriately.
+* Pass environment variables via `kubernetes.user_code_deployment_env` and secrets via `kubernetes.user_code_deployment_env_secrets`.
+* Helm values and chart overrides can be supplied under `chart` in the config file — these are passed to the user-deployments Helm chart.
 
-### Versioning
+# Tips
 
-Dagster-uc deploys each image with a version number as a tag. The versioning is done by checking the latest version of that image in the container registry, and then increment by one.
+* Keep a `defaults` section in your config file to reduce duplication between environments.
+* Use environment-specific overrides for registry, kube context, and secrets.
+* If you use Azure, set `docker.use_az_login: True` and ensure your environment has access to `az` and the appropriate credentials.
 
-Without this, using the same image tag would cause Dagster to pull the latest image of that tag during existing jobs, potentially causing data inconsistencies.
+# Troubleshooting
 
-> **Important:** Use a custom garbage collection policy to remove old branches or keep only the last X tag versions to prevent your container registry from growing too large in size.
+* If Helm chart upgrades fail due to schema validation, try setting `helm.skip_schema_validation: True` in your `defaults` or environment override.
+* Check that `kubernetes.context` points to the correct cluster and that your kube credentials have permission to modify the target namespace.
+* Ensure the `code_path` points to an importable Python module that starts your Dagster definitions.
 
-### Requirements
+# Example test config
 
-Dagster-uc passes a `build-arg=BRANCH_NAME` to the image building step.This is useful because you can script the use of the `BRANCH_NAME` environment variable in your Dagster project code to perform different tasks, such as using a custom IO manager or different secrets. The branch name is either the Git branch or the environment when `cicd` is `true`.
-
-## Kubernetes
-
-Instruct dagster-uc to use the correct `kubernetes_context` that can access your `namespace`. Additionally, configure the pod to use specific compute resource `requests` and `limits`, and set secrets as environment variables using `user_code_deployment_env_secrets` or plain environment variables using `user_code_deployment_env`.
+A small, real example is checked into the repo under `tests/config/.config_user_code_deployments.yaml` and demonstrates the new nested structure used by the CLI tests.
