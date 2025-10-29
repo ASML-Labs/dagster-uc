@@ -1,6 +1,6 @@
 [project]
 name = "dagster-uc"
-version = "0.5.6"
+version = "0.6.0"
 authors = [
     {name = "Stefan Verbruggen"},
     {name = "Ion Koutsouris"},
@@ -24,6 +24,7 @@ dependencies = [
     "pytz",
     "pydantic>=2",
     "packaging>=25.0",
+    "pydantic-settings>=2",
 ]
 
 [tool.uv]

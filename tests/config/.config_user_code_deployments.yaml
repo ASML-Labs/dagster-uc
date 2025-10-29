@@ -1,0 +1,67 @@
+defaults:
+  repository_root: "."
+  code_path: example/repo.py
+  dagster_version: 1.11.16
+  cicd: false
+  use_project_name: True
+  use_latest_chart_version: True
+
+  # Docker configuration
+  docker:
+    docker_root: "."
+    docker_env_vars:
+      - FOO
+      - FOO='string'
+    image_prefix: "example"
+    use_az_login: True
+    container_registry_chart_path: "helm/dagster/dagster-user-deployments"
+
+  # helm configuration
+  helm:
+    skip_schema_validation: True
+
+  kubernetes:
+    namespace: dagster
+    node: cpunode
+    requests:
+      cpu: 150m
+      memory: 750Mi
+    limits:
+      cpu: 4000m
+      memory: 2000Mi
+    user_code_deployment_env_secrets:
+      - name: dagster-storage-secret
+
+  chart: {}
+
+dev:
+  environment: dev
+  dagster_gui_url: "http://dagster.dev"
+
+  docker:
+    dockerfile: "docker/dev.Dockerfile"
+    container_registry: dagster-uc.dev.acr.io
+
+  kubernetes:
+    context: "aks-dev"
+    user_code_deployment_env:
+      - name: ON_K8S
+        value: '1'
+      - name: ENVIRONMENT
+        value: dev
+
+acc:
+  environment: acc
+  dagster_gui_url: "http://dagster.acc"
+
+  docker:
+    dockerfile: "docker/acc.Dockerfile"
+    container_registry: dagster-uc.acc.acr.io
+
+  kubernetes:
+    context: "aks-acc"
+    user_code_deployment_env:
+      - name: ON_K8S
+        value: '1'
+      - name: ENVIRONMENT
+        value: acc

@@ -21,7 +21,7 @@ from kr8s.objects import Service as Service
 from kr8s.objects import ServiceAccount as ServiceAccount
 from packaging.version import Version
 
-from dagster_uc.config import UserCodeDeploymentsConfig
+from dagster_uc.config import DagsterUserCodeConfiguration
 from dagster_uc.configmaps import BASE_CONFIGMAP, BASE_CONFIGMAP_DATA
 from dagster_uc.log import logger
 from dagster_uc.utils import login_registry_helm
@@ -37,7 +37,7 @@ class DagsterDeployment(NamedTuple):
 class DagsterUserCodeHandler:
     """This the dagster-user code handler for common activities such as updating config maps, listing them and modifying them."""
 
-    def __init__(self, config: UserCodeDeploymentsConfig, kr8s_api: kr8s.Api) -> None:
+    def __init__(self, config: DagsterUserCodeConfiguration, kr8s_api: kr8s.Api) -> None:
         self.config = config
         self.api = kr8s_api
 
@@ -45,24 +45,26 @@ class DagsterUserCodeHandler:
         """Creates a user deployments_configmap if it doesn't exist yet."""
         try:
             self._read_namespaced_config_map(
-                self.config.user_code_deployments_configmap_name,
+                self.config.dagster_chart_config.deployments_configmap_name,
             )
         except kr8s.NotFoundError:
             from copy import deepcopy
 
             dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
             dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
-                self.config.user_code_deployments_configmap_name
+                self.config.dagster_chart_config.deployments_configmap_name,
             )
             base_copy = deepcopy(BASE_CONFIGMAP_DATA)
-            base_copy["imagePullSecrets"] = self.config.image_pull_secrets
+            base_copy["imagePullSecrets"] = [
+                item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
+            ]
             dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
                 base_copy,
             )
 
             ConfigMap(
                 resource=dagster_user_deployments_values_yaml_configmap,
-                namespace=self.config.namespace,
+                namespace=self.config.kubernetes_config.namespace,
                 api=self.api,
             ).create()
 
@@ -75,13 +77,15 @@ class DagsterUserCodeHandler:
 
         dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
         default_map = deepcopy(BASE_CONFIGMAP_DATA)
-        default_map["imagePullSecrets"] = self.config.image_pull_secrets
+        default_map["imagePullSecrets"] = [
+            item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
+        ]
 
         dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
             default_map,
         )
         configmap = self._read_namespaced_config_map(
-            self.config.user_code_deployments_configmap_name,
+            self.config.dagster_chart_config.deployments_configmap_name,
         )
         configmap.patch(dagster_user_deployments_values_yaml_configmap)
 
@@ -92,7 +96,7 @@ class DagsterUserCodeHandler:
         currently stored on k8s.
         """
         config_map = self._read_namespaced_config_map(
-            self.config.user_code_deployments_configmap_name,
+            self.config.dagster_chart_config.deployments_configmap_name,
         )
         current_deployments: list = yaml.safe_load(config_map["data"]["yaml"])["deployments"]
         return current_deployments
@@ -125,7 +129,7 @@ class DagsterUserCodeHandler:
         deployments. Should be called after adding or removing user-code deployments.
         """
         configmap = self._read_namespaced_config_map(
-            self.config.dagster_workspace_yaml_configmap_name,
+            self.config.dagster_chart_config.workspace_yaml_configmap_name,
         )
 
         last_applied_configuration = (
@@ -158,8 +162,8 @@ class DagsterUserCodeHandler:
             "data": {"workspace.yaml": workspaceyaml},
         }
         new_configmap["metadata"] = {
-            "name": self.config.dagster_workspace_yaml_configmap_name,
-            "namespace": self.config.namespace,
+            "name": self.config.dagster_chart_config.workspace_yaml_configmap_name,
+            "namespace": self.config.kubernetes_config.namespace,
             "annotations": {
                 "kubectl.kubernetes.io/last-applied-configuration": last_applied_configuration,
             },
@@ -184,21 +188,24 @@ class DagsterUserCodeHandler:
         tz = timezone("Europe/Amsterdam")
 
         values_dict = yaml.safe_load(
-            self._read_namespaced_config_map(self.config.user_code_deployments_configmap_name)[
-                "data"
-            ]["yaml"],
+            self._read_namespaced_config_map(
+                self.config.dagster_chart_config.deployments_configmap_name,
+            )["data"]["yaml"],
         )
         self.update_dagster_workspace_yaml()
 
         loop = asyncio.new_event_loop()
 
-        if self.config.use_az_login and self.config.container_registry_chart_path is not None:
-            login_registry_helm(self.config.container_registry)
+        if (
+            self.config.docker_config.use_az_login
+            and self.config.docker_config.container_registry_chart_path is not None
+        ):
+            login_registry_helm(self.config.docker_config.container_registry)
 
-        RELEASE_NAME = self.config.uc_release_name  # noqa
-        helm_client = Client(kubecontext=self.config.kubernetes_context)
+        RELEASE_NAME = self.config.dagster_chart_config.release_name  # noqa
+        helm_client = Client(kubecontext=self.config.kubernetes_config.context)
 
-        if self.config.container_registry_chart_path is None:
+        if self.config.docker_config.container_registry_chart_path is None:
             chart = loop.run_until_complete(
                 helm_client.get_chart(
                     chart_ref="dagster-user-deployments",
@@ -212,8 +219,8 @@ class DagsterUserCodeHandler:
             chart = loop.run_until_complete(
                 helm_client.get_chart(
                     chart_ref=os.path.join(
-                        f"oci://{self.config.container_registry}",
-                        self.config.container_registry_chart_path,
+                        f"oci://{self.config.docker_config.container_registry}",
+                        self.config.docker_config.container_registry_chart_path,
                     ),
                     version=self.config.dagster_version
                     if not self.config.use_latest_chart_version
@@ -229,11 +236,11 @@ class DagsterUserCodeHandler:
                 RELEASE_NAME,
                 chart,
                 values_dict,
-                create_namespace=self.config.helm_create_new_namespace,
-                namespace=self.config.namespace,
+                create_namespace=self.config.helm_config.create_new_namespace,
+                namespace=self.config.kubernetes_config.namespace,
                 wait=True,
-                disable_openapi_validation=self.config.helm_disable_openapi_validation,
-                skip_schema_validation=self.config.helm_skip_schema_validation,
+                disable_openapi_validation=self.config.helm_config.disable_openapi_validation,
+                skip_schema_validation=self.config.helm_config.skip_schema_validation,
             ),
         )
         if installed.status == ReleaseRevisionStatus.FAILED:
@@ -241,13 +248,16 @@ class DagsterUserCodeHandler:
                 "Dagster-usercode helm release install or upgrade failed, rolling back now..",
             )
 
-            release = Release(name=RELEASE_NAME, namespace=self.config.namespace)
+            release = Release(name=RELEASE_NAME, namespace=self.config.kubernetes_config.namespace)
             loop.run_until_complete(release.rollback())
             raise Exception("Helm user-code deployment failed, had to rollback.")
 
         if reload_dagster:
             for deployment_name in ["dagster-daemon", "dagster-dagster-webserver"]:
-                deployment = Deployment.get(deployment_name, namespace=self.config.namespace)
+                deployment = Deployment.get(
+                    deployment_name,
+                    namespace=self.config.kubernetes_config.namespace,
+                )
 
                 reload_patch = {
                     "spec": {
@@ -279,7 +289,7 @@ class DagsterUserCodeHandler:
             "name": name,
             "image": {
                 "repository": os.path.join(
-                    self.config.container_registry,
+                    self.config.docker_config.container_registry,
                     image_prefix or "",
                     name,
                 ),
@@ -288,29 +298,40 @@ class DagsterUserCodeHandler:
             },
             "dagsterApiGrpcArgs": [
                 "-f",
-                os.path.join(self.config.docker_root, self.config.code_path),
+                os.path.join(self.config.docker_config.docker_root, self.config.code_path),
             ],
             "port": 3030,
             "includeConfigInLaunchedRuns": {"enabled": True},
-            "env": self.config.user_code_deployment_env,
+            "env": [
+                item.model_dump() for item in self.config.kubernetes_config.user_code_deployment_env
+            ],
             "envConfigMaps": [],
-            "envSecrets": self.config.user_code_deployment_env_secrets,
+            "envSecrets": [
+                item.model_dump()
+                for item in self.config.kubernetes_config.user_code_deployment_env_secrets
+            ],
             "annotations": {},
-            "nodeSelector": {"agentpool": self.config.node},
+            "nodeSelector": {"agentpool": self.config.kubernetes_config.node},
             "affinity": {},
             "resources": {
-                "limits": self.config.limits,
-                "requests": self.config.requests,
+                "limits": self.config.kubernetes_config.limits.model_dump()
+                if self.config.kubernetes_config.limits is not None
+                else None,
+                "requests": self.config.kubernetes_config.requests.model_dump()
+                if self.config.kubernetes_config.requests is not None
+                else None,
             },
             "tolerations": [
                 {
                     "key": "agentpool",
                     "operator": "Equal",
-                    "value": self.config.node,
+                    "value": self.config.kubernetes_config.node,
                     "effect": "NoSchedule",
                 },
             ],
-            "imagePullSecrets": self.config.image_pull_secrets,
+            "imagePullSecrets": [
+                item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
+            ],
             "podSecurityContext": {},
             "securityContext": {},
             "labels": {},
@@ -325,8 +346,8 @@ class DagsterUserCodeHandler:
             "startupProbe": {"enabled": False},
             "service": {
                 "annotations": {
-                    "meta.helm.sh/release-name": self.config.uc_release_name,
-                    "meta.helm.sh/release-namespace": self.config.namespace,
+                    "meta.helm.sh/release-name": self.config.dagster_chart_config.release_name,
+                    "meta.helm.sh/release-namespace": self.config.kubernetes_config.namespace,
                 },
             },
         }
@@ -338,7 +359,11 @@ class DagsterUserCodeHandler:
         name: str,
     ) -> ConfigMap:
         """Read a configmap that exists on the k8s cluster"""
-        configmap = ConfigMap.get(name=name, namespace=self.config.namespace, api=self.api)
+        configmap = ConfigMap.get(
+            name=name,
+            namespace=self.config.kubernetes_config.namespace,
+            api=self.api,
+        )
         return configmap
 
     def add_user_deployment_to_configmap(
@@ -396,7 +421,7 @@ class DagsterUserCodeHandler:
         from copy import deepcopy
 
         configmap = self._read_namespaced_config_map(
-            self.config.user_code_deployments_configmap_name,
+            self.config.dagster_chart_config.deployments_configmap_name,
         )
         last_applied_configuration = (
             configmap["metadata"]
@@ -415,13 +440,15 @@ class DagsterUserCodeHandler:
         logging.debug(f"List of currently configured deployments:\n{depl_list_str}\n\n")
         new_configmap_data = deepcopy(BASE_CONFIGMAP_DATA)
         new_configmap_data["deployments"] = current_deployments
-        new_configmap_data["imagePullSecrets"] = self.config.image_pull_secrets
+        new_configmap_data["imagePullSecrets"] = [
+            item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
+        ]
         new_configmap = deepcopy(BASE_CONFIGMAP)
         new_configmap["data"]["yaml"] = yaml.dump(new_configmap_data)
 
         new_configmap["metadata"] = {
-            "name": self.config.user_code_deployments_configmap_name,
-            "namespace": self.config.namespace,
+            "name": self.config.dagster_chart_config.deployment_semaphore_name,
+            "namespace": self.config.kubernetes_config.namespace,
             "annotations": {
                 "kubectl.kubernetes.io/last-applied-configuration": last_applied_configuration,
             },
@@ -465,7 +492,7 @@ class DagsterUserCodeHandler:
         ## GETS cluster version from dagster daemon pod
         daemon_pod = Pod.get(
             label_selector="deployment=daemon",
-            namespace=self.config.namespace,
+            namespace=self.config.kubernetes_config.namespace,
             api=self.api,
         )
 
@@ -492,7 +519,7 @@ class DagsterUserCodeHandler:
             self.api.get(
                 Pod,
                 label_selector=f"deployment={label}",
-                namespace=self.config.namespace,
+                namespace=self.config.kubernetes_config.namespace,
             ),
         )
         return len(running_pods) > 0
@@ -502,8 +529,8 @@ class DagsterUserCodeHandler:
         if reset_lock:
             try:
                 semaphore = ConfigMap.get(
-                    self.config.uc_deployment_semaphore_name,
-                    namespace=self.config.namespace,
+                    self.config.dagster_chart_config.deployment_semaphore_name,
+                    namespace=self.config.kubernetes_config.namespace,
                     api=self.api,
                 )
                 semaphore.delete()
@@ -512,8 +539,8 @@ class DagsterUserCodeHandler:
 
         try:
             semaphore = ConfigMap.get(
-                self.config.uc_deployment_semaphore_name,
-                namespace=self.config.namespace,
+                self.config.dagster_chart_config.deployment_semaphore_name,
+                namespace=self.config.kubernetes_config.namespace,
                 api=self.api,
             )
             if semaphore.data.get("locked") == "true":
@@ -526,8 +553,8 @@ class DagsterUserCodeHandler:
             semaphore = ConfigMap(
                 {
                     "metadata": {
-                        "name": self.config.uc_deployment_semaphore_name,
-                        "namespace": self.config.namespace,
+                        "name": self.config.dagster_chart_config.deployment_semaphore_name,
+                        "namespace": self.config.kubernetes_config.namespace,
                     },
                     "data": {"locked": "true"},
                 },
@@ -539,8 +566,8 @@ class DagsterUserCodeHandler:
         """Releases the semaphore lock"""
         try:
             semaphore = ConfigMap.get(
-                self.config.uc_deployment_semaphore_name,
-                namespace=self.config.namespace,
+                self.config.dagster_chart_config.deployment_semaphore_name,
+                namespace=self.config.kubernetes_config.namespace,
                 api=self.api,
             )
             semaphore.patch({"data": {"locked": "false"}})
