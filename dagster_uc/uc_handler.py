@@ -447,7 +447,7 @@ class DagsterUserCodeHandler:
         new_configmap["data"]["yaml"] = yaml.dump(new_configmap_data)
 
         new_configmap["metadata"] = {
-            "name": self.config.dagster_chart_config.deployment_semaphore_name,
+            "name": self.config.dagster_chart_config.deployments_configmap_name,
             "namespace": self.config.kubernetes_config.namespace,
             "annotations": {
                 "kubectl.kubernetes.io/last-applied-configuration": last_applied_configuration,
