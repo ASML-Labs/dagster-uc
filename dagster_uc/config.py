@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from pydantic_settings import (
     BaseSettings,
+    EnvSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
     YamlConfigSettingsSource,
@@ -99,7 +100,7 @@ class EnvParsedYamlConfigSettingsSource(YamlConfigSettingsSource):
         return json.loads(data)
 
 
-class _BaseSettingsWithYaml(BaseSettings):
+class _BaseSettingsWithYamlAndEnv(BaseSettings):
     model_config = SettingsConfigDict(
         extra="ignore",
     )
@@ -113,7 +114,10 @@ class _BaseSettingsWithYaml(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,  # noqa: ARG003
         file_secret_settings: PydanticBaseSettingsSource,  # noqa: ARG003
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (EnvParsedYamlConfigSettingsSource(settings_cls, yaml_file=get_config_file_path()),)
+        return (
+            EnvSettingsSource(settings_cls),
+            EnvParsedYamlConfigSettingsSource(settings_cls, yaml_file=get_config_file_path()),
+        )
 
 
 class DockerConfiguration(BaseModel):
@@ -159,7 +163,7 @@ class DagsterUserCodeChartConfiguration(BaseModel):
     release_name: str = "dagster-user-code"
 
 
-class DagsterUserCodeConfiguration(_BaseSettingsWithYaml):
+class DagsterUserCodeConfiguration(_BaseSettingsWithYamlAndEnv):
     """Dagster User Code configuration"""
 
     # Environment/code config
