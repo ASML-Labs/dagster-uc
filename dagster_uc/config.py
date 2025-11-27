@@ -152,6 +152,8 @@ class KubernetesConfiguration(BaseModel):
     user_code_deployment_env: list[KubernetesEnvVar] = Field(default=[])
     limits: KubernetesResource | None = Field(default=None)
     requests: KubernetesResource | None = Field(default=None)
+    service_account_annotations: dict = Field(default={})
+    pod_labels: dict = Field(default={})
 
 
 class DagsterUserCodeChartConfiguration(BaseModel):

@@ -209,7 +209,7 @@ wheels = [
 
 [[package]]
 name = "dagster-uc"
-version = "0.6.3"
+version = "0.6.4"
 source = { editable = "." }
 dependencies = [
     { name = "kr8s" },
