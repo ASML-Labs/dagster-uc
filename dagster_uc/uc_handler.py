@@ -41,6 +41,29 @@ class DagsterUserCodeHandler:
         self.config = config
         self.api = kr8s_api
 
+    def _get_default_base_configmap(self) -> dict:
+        from copy import deepcopy
+
+        # Create the configmap data
+        default_configmap_data = deepcopy(BASE_CONFIGMAP_DATA)
+        default_configmap_data["imagePullSecrets"] = [
+            item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
+        ]
+        default_configmap_data["serviceAccount"]["annotations"] = (
+            self.config.kubernetes_config.service_account_annotations
+        )
+
+        # Create configmap manifest
+        dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
+        dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
+            self.config.dagster_chart_config.deployments_configmap_name,
+        )
+        # dump raw yaml of the configmap data content into the configmap
+        dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
+            default_configmap_data,
+        )
+        return dagster_user_deployments_values_yaml_configmap
+
     def maybe_create_user_deployments_configmap(self) -> None:
         """Creates a user deployments_configmap if it doesn't exist yet."""
         try:
@@ -48,19 +71,7 @@ class DagsterUserCodeHandler:
                 self.config.dagster_chart_config.deployments_configmap_name,
             )
         except kr8s.NotFoundError:
-            from copy import deepcopy
-
-            dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
-            dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
-                self.config.dagster_chart_config.deployments_configmap_name
-            )
-            base_copy = deepcopy(BASE_CONFIGMAP_DATA)
-            base_copy["imagePullSecrets"] = [
-                item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
-            ]
-            dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
-                base_copy,
-            )
+            dagster_user_deployments_values_yaml_configmap = self._get_default_base_configmap()
 
             ConfigMap(
                 resource=dagster_user_deployments_values_yaml_configmap,
@@ -73,17 +84,7 @@ class DagsterUserCodeHandler:
         cluster and replaces it with one with an empty deployments array as read
         from dagster_user_deployments_values_yaml_configmap.
         """
-        from copy import deepcopy
-
-        dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
-        default_map = deepcopy(BASE_CONFIGMAP_DATA)
-        default_map["imagePullSecrets"] = [
-            item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
-        ]
-
-        dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
-            default_map,
-        )
+        dagster_user_deployments_values_yaml_configmap = self._get_default_base_configmap()
         configmap = self._read_namespaced_config_map(
             self.config.dagster_chart_config.deployments_configmap_name,
         )
@@ -334,7 +335,7 @@ class DagsterUserCodeHandler:
             ],
             "podSecurityContext": {},
             "securityContext": {},
-            "labels": {},
+            "labels": self.config.kubernetes_config.pod_labels,
             "readinessProbe": {
                 "enabled": True,
                 "periodSeconds": 20,
