@@ -52,7 +52,7 @@ class DagsterUserCodeHandler:
 
             dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
             dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
-                self.config.dagster_chart_config.deployments_configmap_name,
+                self.config.dagster_chart_config.deployments_configmap_name
             )
             base_copy = deepcopy(BASE_CONFIGMAP_DATA)
             base_copy["imagePullSecrets"] = [
