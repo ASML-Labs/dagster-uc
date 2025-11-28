@@ -444,6 +444,10 @@ class DagsterUserCodeHandler:
         new_configmap_data["imagePullSecrets"] = [
             item.model_dump() for item in self.config.kubernetes_config.image_pull_secrets
         ]
+        new_configmap_data["serviceAccount"]["annotations"] = (
+            self.config.kubernetes_config.service_account_annotations
+        )
+
         new_configmap = deepcopy(BASE_CONFIGMAP)
         new_configmap["data"]["yaml"] = yaml.dump(new_configmap_data)
 
