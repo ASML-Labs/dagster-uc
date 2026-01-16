@@ -17,6 +17,7 @@ from dagster_uc.config import load_config
                 "dagster_gui_url": "http://dagster.dev",
                 "verbose": False,
                 "use_project_name": True,
+                "project_name_override": "",
                 "use_latest_chart_version": True,
                 "docker_config": {
                     "container_registry": "dagster-uc.dev.acr.io",
@@ -67,6 +68,7 @@ from dagster_uc.config import load_config
                 "dagster_gui_url": "http://dagster.acc",
                 "verbose": False,
                 "use_project_name": True,
+                "project_name_override": "",
                 "use_latest_chart_version": True,
                 "docker_config": {
                     "container_registry": "dagster-uc.acc.acr.io",
