@@ -476,7 +476,6 @@ class DagsterUserCodeHandler:
             project_name = self._get_project_name()
         else:
             project_name = None
-        print(project_name)
         if self.config.cicd and branch is None:
             branch = self.config.environment
         else:
