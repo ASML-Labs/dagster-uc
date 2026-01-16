@@ -464,13 +464,19 @@ class DagsterUserCodeHandler:
         self,
         deployment_name_suffix: str | None = None,
         use_project_name: bool = True,
+        project_name_override: str = "",
         branch: str | None = None,
     ) -> DagsterDeployment:
         """Creates a deployment name based on the name of the pyproject.toml and name of git branch"""
         logger.debug("Determining deployment name...")
 
-        project_name = self._get_project_name() if use_project_name else None
-
+        # project_name = self._get_project_name() if use_project_name else None
+        if project_name_override != "":
+            project_name = project_name_override
+        elif use_project_name:
+            project_name = self._get_project_name()
+        else:
+            project_name = None
         if self.config.cicd and branch is None:
             branch = self.config.environment
         else:

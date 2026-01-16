@@ -99,6 +99,9 @@ def init_config(
         use_project_name=typer.confirm(
             "Whether to use the pyproject.toml project-name as deployment name prefix.",
         ),
+        project_name_override=typer.confirm(
+            "Override deployment name prefix if not empty",
+        ),
         docker=DockerConfiguration(
             docker_root=typer.prompt("Path of docker scope", default="."),
             dockerfile=typer.prompt("Path of dockerfile", default="./Dockerfile"),
@@ -328,7 +331,10 @@ def check_deployment(
 ) -> None:
     """This function executes before any other nested cli command is called and loads the configuration object."""
     if not name:
-        name = handler.get_deployment_name(use_project_name=config.use_project_name).full_name
+        name = handler.get_deployment_name(
+            use_project_name=config.use_project_name,
+            project_name_override=config.project_name_override,
+        ).full_name
     else:
         # In case the UI name separator of the deployment is passed
         name = name.replace(":", "--")

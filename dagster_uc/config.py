@@ -177,6 +177,7 @@ class DagsterUserCodeConfiguration(_BaseSettingsWithYamlAndEnv):
     dagster_gui_url: str | None = Field(default=None)
     verbose: bool = Field(default=False)
     use_project_name: bool = Field(default=True)
+    project_name_override: str = Field(default="")
     use_latest_chart_version: bool = False
 
     docker_config: DockerConfiguration = Field(default_factory=DockerConfiguration, alias="docker")  # type: ignore
