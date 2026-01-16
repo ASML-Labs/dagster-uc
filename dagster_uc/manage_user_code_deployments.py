@@ -298,11 +298,13 @@ def deployment_delete(
         elif branch is not None:
             name = handler.get_deployment_name(
                 use_project_name=config.use_project_name,
+                project_name_override=config.project_name_override,
                 branch=branch,
             ).full_name
         else:
             name = handler.get_deployment_name(
                 use_project_name=config.use_project_name,
+                project_name_override=config.project_name_override,
             ).full_name
 
         handler.remove_user_deployment_from_configmap(name)
@@ -432,6 +434,7 @@ def deployment_deploy(
             dagster_deployment = handler.get_deployment_name(
                 deployment_name_suffix,
                 use_project_name=config.use_project_name,
+                project_name_override=config.project_name_override,
             )
             (deployment_name, branch_name) = (
                 dagster_deployment.full_name,
