@@ -33,7 +33,7 @@ The configuration format is now nested and grouped by concerns (e.g. `docker`, `
 * `kubernetes` — Kubernetes-specific settings (context, namespace, resource requests/limits, env and secret lists).
 * `helm` — Helm-related settings (for example, skip schema validation).
 * `chart` — chart-specific values you may want to supply into the user-deployments Helm chart.
-* `use_latest_chart_version` and `use_project_name` — deployment behavior flags.
+* `use_latest_chart_version`, `use_project_name`, and `project_name_override` — deployment behavior flags.
 
 Order of loading configuration:
 1. `defaults`
@@ -50,7 +50,6 @@ defaults:
   cicd: false
   use_project_name: True
   use_latest_chart_version: True
-
   # Docker configuration (grouped under `docker`)
   docker:
     docker_root: "."
@@ -99,6 +98,7 @@ dev:
 acc:
   environment: acc
   dagster_gui_url: "http://dagster.acc"
+  project_name_override: 'example-acc'
 
   docker:
     dockerfile: "docker/acc.Dockerfile"
@@ -127,6 +127,7 @@ Notes on common config keys (now nested):
 * `kubernetes.user_code_deployment_env_secrets` — a list of secrets to be mounted/injected as environment variables.
 * `helm.skip_schema_validation` — useful for older Helm chart setups or when schema validation causes issues.
 * `use_project_name` — when True, the project name from `pyproject.toml` is prefixed to the deployment name.
+* `project_name_override` - When set, the project name from `pyproject.toml` is overridden with this value
 
 ### Overriding Config with Environment Variables
 
