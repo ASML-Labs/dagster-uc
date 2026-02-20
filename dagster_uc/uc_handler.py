@@ -56,7 +56,7 @@ class DagsterUserCodeHandler:
         # Create configmap manifest
         dagster_user_deployments_values_yaml_configmap = deepcopy(BASE_CONFIGMAP)
         dagster_user_deployments_values_yaml_configmap["metadata"]["name"] = (
-            self.config.dagster_chart_config.deployments_configmap_name,
+            self.config.dagster_chart_config.deployments_configmap_name
         )
         # dump raw yaml of the configmap data content into the configmap
         dagster_user_deployments_values_yaml_configmap["data"]["yaml"] = yaml.dump(
