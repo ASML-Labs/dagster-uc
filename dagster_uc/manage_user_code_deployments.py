@@ -424,7 +424,7 @@ def deployment_deploy(
     handler._ensure_dagster_version_match()
     if extra_env_args is not None:
         for eea in extra_env_args:
-            pattern = r"^(\w+)=(\S+)$" #captures in key=value format
+            pattern = r"^(\w+)=(\S+)$"  # captures in key=value format
 
             match = re.match(pattern, eea)
             if match:
