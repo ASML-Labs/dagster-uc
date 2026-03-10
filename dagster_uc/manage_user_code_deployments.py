@@ -19,6 +19,7 @@ from dagster_uc.config import (
     DagsterUserCodeConfiguration,
     DockerConfiguration,
     KubernetesConfiguration,
+    KubernetesEnvVar,
     load_config,
 )
 from dagster_uc.log import logger
@@ -410,10 +411,22 @@ def deployment_deploy(
             help="If this is provided, ignore the check for if podman is installed. This is used for some CI/CD environments that require podman to always be in sudo mode",
         ),
     ] = False,
+    extra_env_args: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--extra-env",
+            help="If this is provided in the format 'key=value', this supplies extra key-value pairs to user_code_deployment_env, if an option is provided that is not in this format, an error is raised",
+        ),
+    ] = None,
 ):
     """Handles deployment to kubernetes cluster."""
     handler._ensure_dagster_version_match()
-
+    if extra_env_args is not None:
+        for eea in extra_env_args:
+            key_value = eea.split("=")
+            if len(key_value) != 2:
+                raise ValueError(f"{eea} is not in the format key=value")
+            config.user_code_deployment_env.append(KubernetesEnvVar(name=eea[0], value=eea[1]))
     count = 0
     while not handler.acquire_semaphore(reset_lock):
         logger.error(
