@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import pprint
+import re
 import time
 from typing import Annotated, cast
 
@@ -19,6 +20,7 @@ from dagster_uc.config import (
     DagsterUserCodeConfiguration,
     DockerConfiguration,
     KubernetesConfiguration,
+    KubernetesEnvVar,
     load_config,
 )
 from dagster_uc.log import logger
@@ -410,10 +412,28 @@ def deployment_deploy(
             help="If this is provided, ignore the check for if podman is installed. This is used for some CI/CD environments that require podman to always be in sudo mode",
         ),
     ] = False,
+    extra_env_args: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--extra-env",
+            help="If this is provided in the format 'key=value', this supplies extra key-value pairs to user_code_deployment_env, if an option is provided that is not in this format, an error is raised",
+        ),
+    ] = None,
 ):
     """Handles deployment to kubernetes cluster."""
     handler._ensure_dagster_version_match()
+    if extra_env_args is not None:
+        for eea in extra_env_args:
+            pattern = r"^(\w+)=(\S+)$"  # captures in key=value format
 
+            match = re.match(pattern, eea)
+            if match:
+                key, value = match.groups()  # Extract the groups
+                config.kubernetes_config.user_code_deployment_env.append(
+                    KubernetesEnvVar(name=key, value=value),
+                )
+            else:
+                raise ValueError(f"{eea} is not in key=value format")
     count = 0
     while not handler.acquire_semaphore(reset_lock):
         logger.error(
