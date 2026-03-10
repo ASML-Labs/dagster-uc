@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import pprint
+import re
 import time
 from typing import Annotated, cast
 
@@ -423,12 +424,16 @@ def deployment_deploy(
     handler._ensure_dagster_version_match()
     if extra_env_args is not None:
         for eea in extra_env_args:
-            key_value = eea.split("=")
-            if len(key_value) != 2:
-                raise ValueError(f"{eea} is not in the format key=value")
-            config.kubernetes_config.user_code_deployment_env.append(
-                KubernetesEnvVar(name=eea[0], value=eea[1]),
-            )
+            pattern = r"^(\w+)=(\S+)$" #captures in key=value format
+
+            match = re.match(pattern, eea)
+            if match:
+                key, value = match.groups()  # Extract the groups
+                config.kubernetes_config.user_code_deployment_env.append(
+                    KubernetesEnvVar(name=key, value=value),
+                )
+            else:
+                raise ValueError(f"{eea} is not in key=value format")
     count = 0
     while not handler.acquire_semaphore(reset_lock):
         logger.error(
