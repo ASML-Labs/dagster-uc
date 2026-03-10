@@ -426,7 +426,7 @@ def deployment_deploy(
             key_value = eea.split("=")
             if len(key_value) != 2:
                 raise ValueError(f"{eea} is not in the format key=value")
-            config.KubernetesConfiguration.user_code_deployment_env.append(
+            config.kubernetes_config.user_code_deployment_env.append(
                 KubernetesEnvVar(name=eea[0], value=eea[1]),
             )
     count = 0
