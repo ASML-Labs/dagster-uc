@@ -65,3 +65,4 @@ acc:
         value: '1'
       - name: ENVIRONMENT
         value: acc
+    pull_policy: Always

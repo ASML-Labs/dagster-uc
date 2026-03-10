@@ -76,6 +76,7 @@ defaults:
       memory: 2000Mi
     user_code_deployment_env_secrets:
       - name: dagster-storage-secret
+    pull_policy: Always
 
   chart: {}
 
@@ -94,7 +95,7 @@ dev:
         value: '1'
       - name: ENVIRONMENT
         value: dev
-
+    pull_policy: IfNotPresent
 acc:
   environment: acc
   dagster_gui_url: "http://dagster.acc"
@@ -125,6 +126,7 @@ Notes on common config keys (now nested):
 * `kubernetes.requests` / `kubernetes.limits` — resource requests and limits for the user code deployment pod.
 * `kubernetes.user_code_deployment_env` — a list of name/value env objects to inject into the user-code deployment container.
 * `kubernetes.user_code_deployment_env_secrets` — a list of secrets to be mounted/injected as environment variables.
+* `kubernetes.pull_policy` - Standard Kubernetes Pull Policy for images, can either be 'IfNotPresent' or 'Always'
 * `helm.skip_schema_validation` — useful for older Helm chart setups or when schema validation causes issues.
 * `use_project_name` — when True, the project name from `pyproject.toml` is prefixed to the deployment name.
 * `project_name_override` - When set, the project name from `pyproject.toml` is overridden with this value

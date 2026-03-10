@@ -295,7 +295,7 @@ class DagsterUserCodeHandler:
                     name,
                 ),
                 "tag": tag,
-                "pullPolicy": "IfNotPresent",  # Safe, due to versioning of each deployment image
+                "pullPolicy": self.config.kubernetes_config.pull_policy,  # Safe, due to versioning of each deployment image
             },
             "dagsterApiGrpcArgs": [
                 "-f",

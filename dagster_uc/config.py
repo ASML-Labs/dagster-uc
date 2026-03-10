@@ -154,6 +154,7 @@ class KubernetesConfiguration(BaseModel):
     requests: KubernetesResource | None = Field(default=None)
     service_account_annotations: dict = Field(default={})
     pod_labels: dict = Field(default={})
+    pull_policy: Literal["IfNotPresent", "Always"] = "IfNotPresent"
 
 
 class DagsterUserCodeChartConfiguration(BaseModel):
