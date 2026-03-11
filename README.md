@@ -154,11 +154,12 @@ Environment variables can still be used to override configuration at load time b
 dagster-uc [GLOBAL_OPTIONS] <command> [SUBCOMMAND] [OPTIONS]
 ```
 
-Global options
+Global options:
 
-  -e, --environment TEXT — Target environment (default: dev). Available options are derived from your YAML config file
-  -c, --config-file PATH — Path to your YAML config file. (default: '.')
-  -v, --verbose — Enable DEBUG logs.
+* -e, --environment TEXT — Target environment (default: dev). Available options are derived from your YAML config file
+* -c, --config-file PATH — Path to your YAML config file. (default: '.')
+* -v, --verbose — Enable DEBUG logs.
+
 ## Show Config
 
 ```bash
@@ -183,24 +184,25 @@ dagster-uc [GLOBAL_OPTIONS] deployment deploy [OPTIONS]
 Using the configuration file provided, build a dagster-user-deployment image using podman/buildah, push it to a container registry, then adds/creates (if not present) a code location deployment for Dagster to read.
 
 Options:
-  -f, --force — Always do a full redeploy (reapply manifests; useful  for clean updates).
-  -b, --skip-build — Skip building/pushing the container image.
-  -s, --deployment-name-suffix TEXT — Append a suffix to the default name (branch-based).
-  -n, --deployment-name TEXT — Override the name entirely (ignores suffix).
-  -r, --reset-lock — Reset the deployment semaphore if a previous deploy is stuck.
-  -u, --use-sudo — Run the build tool with sudo.
-  --ignore-check — Skip the podman presence check (helpful in opinionated CI).
-  --extra-env TEXT (repeatable) — Inject extra environment variables into the user code pod (must be in format '{key}={value}').
+
+* -f, --force — Always do a full redeploy (reapply manifests; useful  for clean updates).
+* -b, --skip-build — Skip building/pushing the container image.
+* -s, --deployment-name-suffix TEXT — Append a suffix to the default name (branch-based).
+* -n, --deployment-name TEXT — Override the name entirely (ignores suffix).
+* -r, --reset-lock — Reset the deployment semaphore if a previous deploy is stuck.
+* -u, --use-sudo — Run the build tool with sudo.
+* --ignore-check — Skip the podman presence check (helpful in opinionated CI).
+* --extra-env TEXT (repeatable) — Inject extra environment variables into the user code pod (must be in format '{key}={value}').
 
 ## Deployment Check
 
 ```bash
 dagster-uc [GLOBAL_OPTIONS] deployment check [-n name] [-t timeout]
 ```
-Options
+Options:
 
-  -n, --name TEXT — Deployment name; if omitted, uses the default for the current branch.
-  -t, --timeout INTEGER — Seconds to follow logs (default: 60).
+* -n, --name TEXT — Deployment name; if omitted, uses the default for the current branch.
+* -t, --timeout INTEGER — Seconds to follow logs (default: 60).
 
 ## Deployment Revive
 
@@ -209,8 +211,8 @@ dagster-uc [GLOBAL_OPTIONS] deployment revive -t tag -n name
 
 ```
 
--n, --name TEXT — Name of the deployment to revive (UI : will be normalized to --).
--t, --tag TEXT — Existing image tag to use.
+* -n, --name TEXT — Name of the deployment to revive (UI : will be normalized to --).
+* -t, --tag TEXT — Existing image tag to use.
 
 ## Deployment Delete
 
@@ -219,9 +221,10 @@ dagster-uc [GLOBAL_OPTIONS] deployment delete [OPTIONS]
 ```
 
 Options:
-  -a, --all — Delete all deployment.
-  -n, --name TEXT — Delete a single deployment by name (UI : normalized to --).
-  -b, --branch TEXT — Use a branch name to compute the deployment name (respects project-name rules). Defaults to current git branch.
+
+* -a, --all — Delete all deployment.
+* -n, --name TEXT — Delete a single deployment by name (UI : normalized to --).
+* -b, --branch TEXT — Use a branch name to compute the deployment name (respects project-name rules). Defaults to current git branch.
 
 # Branch naming and deployments
 
