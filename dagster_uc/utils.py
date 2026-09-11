@@ -182,6 +182,7 @@ def build_and_push(
     branch_name: str,
     use_az_login: bool,
     build_envs: list[str],
+    build_args: list[str],
     build_format: Literal["OCI", "docker"] = "OCI",
 ):
     """Build a docker image and push it to the registry"""
@@ -203,7 +204,8 @@ def build_and_push(
     cmd += ["."]  # Since this always has to be at the end
     for env_var in build_envs:
         cmd.extend(["--env", env_var])
-
+    for build_var in build_args:
+        cmd.extend(["--build-arg=" + build_var])
     if use_sudo:
         cmd = ["sudo"] + cmd
 

@@ -212,6 +212,7 @@ def build_push_container(
         branch_name=branch_name,
         use_az_login=config.docker_config.use_az_login,
         build_envs=config.docker_config.docker_env_vars,
+        build_args=config.docker_config.docker_build_args,
         build_format=config.docker_config.build_format,
     )
 
