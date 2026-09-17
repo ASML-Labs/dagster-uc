@@ -127,6 +127,7 @@ class DockerConfiguration(BaseModel):
     dockerfile: str
     docker_root: str = Field(default="")
     docker_env_vars: list[str] = Field(default=[])
+    docker_build_args: list[str] = Field(default=[])
     image_prefix: str = Field(default="")
     use_az_login: bool = Field(default=True)
     container_registry_chart_path: str | None = Field(default=None)

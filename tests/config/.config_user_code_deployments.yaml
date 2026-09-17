@@ -41,7 +41,8 @@ dev:
   docker:
     dockerfile: "docker/dev.Dockerfile"
     container_registry: dagster-uc.dev.acr.io
-
+    docker_build_args:
+      - ENV=TST
   kubernetes:
     context: "aks-dev"
     user_code_deployment_env:
