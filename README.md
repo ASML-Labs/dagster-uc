@@ -112,6 +112,7 @@ acc:
         value: '1'
       - name: ENVIRONMENT
         value: acc
+    include_config_in_launched_runs: False
 ```
 
 Notes on common config keys (now nested):
@@ -127,6 +128,7 @@ Notes on common config keys (now nested):
 * `kubernetes.user_code_deployment_env` — a list of name/value env objects to inject into the user-code deployment container.
 * `kubernetes.user_code_deployment_env_secrets` — a list of secrets to be mounted/injected as environment variables.
 * `kubernetes.pull_policy` - Standard Kubernetes Pull Policy for images, can either be 'IfNotPresent' or 'Always'
+* `kubernetes.include_config_in_launched_runs` - Starting in Dagster 1.13.7, when IncludeConfigInLaunchedRuns is True, node_selector, tolerations, and secrets override anything in the ops_tag. By setting this to False, you will be able to control your nodes with op tags. However, you need to put the kubernetes environment variables and kubernetes secrets  into wherever you define your RunLauncher to enable it to work. 
 * `helm.skip_schema_validation` — useful for older Helm chart setups or when schema validation causes issues.
 * `use_project_name` — when True, the project name from `pyproject.toml` is prefixed to the deployment name.
 * `project_name_override` - When set, the project name from `pyproject.toml` is overridden with this value

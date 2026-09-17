@@ -155,6 +155,7 @@ class KubernetesConfiguration(BaseModel):
     service_account_annotations: dict = Field(default={})
     pod_labels: dict = Field(default={})
     pull_policy: Literal["IfNotPresent", "Always"] = "IfNotPresent"
+    include_config_in_launched_runs: bool = True
 
 
 class DagsterUserCodeChartConfiguration(BaseModel):
