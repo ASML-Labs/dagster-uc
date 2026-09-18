@@ -50,6 +50,7 @@ from dagster_uc.config import load_config
                     "limits": {"cpu": "4000m", "memory": "2000Mi"},
                     "requests": {"cpu": "150m", "memory": "750Mi"},
                     "pull_policy": "IfNotPresent",
+                    "include_config_in_launched_runs": True,
                 },
                 "dagster_chart_config": {
                     "deployments_configmap_name": "dagster-user-deployments-values-yaml",
@@ -103,6 +104,7 @@ from dagster_uc.config import load_config
                     "limits": {"cpu": "4000m", "memory": "2000Mi"},
                     "requests": {"cpu": "150m", "memory": "750Mi"},
                     "pull_policy": "Always",
+                    "include_config_in_launched_runs": True,
                 },
                 "dagster_chart_config": {
                     "deployments_configmap_name": "dagster-user-deployments-values-yaml",

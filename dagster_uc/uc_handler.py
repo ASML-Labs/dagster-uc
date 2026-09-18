@@ -302,7 +302,9 @@ class DagsterUserCodeHandler:
                 os.path.join(self.config.docker_config.docker_root, self.config.code_path),
             ],
             "port": 3030,
-            "includeConfigInLaunchedRuns": {"enabled": True},
+            "includeConfigInLaunchedRuns": {
+                "enabled": self.config.kubernetes_config.include_config_in_launched_runs,
+            },
             "env": [
                 item.model_dump() for item in self.config.kubernetes_config.user_code_deployment_env
             ],
