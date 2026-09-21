@@ -420,6 +420,13 @@ def deployment_deploy(
             help="If this is provided in the format 'key=value', this supplies extra key-value pairs to user_code_deployment_env, if an option is provided that is not in this format, an error is raised",
         ),
     ] = None,
+    extra_build_args: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--extra-build",
+            help="If this is provided in the format 'key=value', this supplies extra key-value pairs to docker_build_args, if an option is provided that is not in this format, an error is raised",
+        ),
+    ] = None,
 ):
     """Handles deployment to kubernetes cluster."""
     handler._ensure_dagster_version_match()
@@ -435,6 +442,17 @@ def deployment_deploy(
                 )
             else:
                 raise ValueError(f"{eea} is not in key=value format")
+    if extra_build_args is not None:
+        for ba in extra_build_args:
+            pattern = r"^(\w+)=(\S+)$"  # captures in key=value format
+            match = re.match(pattern, eea)
+            if match:
+                key, value = match.groups()  # Extract the groups
+                config.docker_config.docker_build_args.append(
+                    ba,
+                )
+            else:
+                raise ValueError(f"{ba} is not in key=value format")
     if deployment_name:
         (deployment_name, branch_name) = (deployment_name, deployment_name)
     else:

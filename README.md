@@ -198,6 +198,7 @@ Options:
 * -u, --use-sudo — Run the build tool with sudo.
 * --ignore-check — Skip the podman presence check (helpful in opinionated CI).
 * --extra-env TEXT (repeatable) — Inject extra environment variables into the user code pod (must be in format '{key}={value}').
+* --extra-build-arg TEXT (repeatable) - Inject extra docker build arguments into the dockerfile (must be in format '{key}={value}')
 
 ## Deployment Check
 
