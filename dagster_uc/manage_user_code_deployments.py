@@ -445,7 +445,7 @@ def deployment_deploy(
     if extra_build_args is not None:
         for ba in extra_build_args:
             pattern = r"^(\w+)=(\S+)$"  # captures in key=value format
-            match = re.match(pattern, eea)
+            match = re.match(pattern, ba)
             if match:
                 key, value = match.groups()  # Extract the groups
                 config.docker_config.docker_build_args.append(
