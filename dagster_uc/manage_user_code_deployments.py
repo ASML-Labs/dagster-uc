@@ -8,6 +8,7 @@ import pprint
 import re
 import subprocess
 import time
+from string import Template
 from typing import Annotated, cast
 
 import kr8s
@@ -192,18 +193,28 @@ def default(
         logger.debug(f"Done: Switched kubernetes context to {config.environment}")
 
 
-def run_hook_script(hook: HookScript) -> bool:
+def run_hook_script(
+    hook: HookScript,
+    template_vars: dict[str, str] | None = None,
+) -> bool:
     """Run a single hook script with its arguments.
+
+    Supports template variables in script path and args using ${VAR_NAME} syntax.
+
     Returns True if the script ran successfully, False otherwise.
     """
     if not hook.script:
         logger.debug("No hook script configured, skipping.")
         return True
 
-    logger.info(f"Running hook script: {hook.script} with args: {hook.args}")
+    # Apply template substitution to script path and args
+    script = Template(hook.script).substitute(template_vars or {})
+    args = [Template(arg).substitute(template_vars or {}) for arg in hook.args]
+
+    logger.info(f"Running hook script: {script} with args: {args}")
 
     try:
-        cmd = ["python3", hook.script] + hook.args
+        cmd = ["python3", script] + args
         result = subprocess.run(
             cmd,
             check=True,
@@ -228,8 +239,14 @@ def run_hook_script(hook: HookScript) -> bool:
         return False
 
 
-def run_hook_scripts(hooks: list[HookScript]) -> bool:
+def run_hook_scripts(
+    hooks: list[HookScript],
+    template_vars: dict[str, str] | None = None,
+) -> bool:
     """Run multiple hook scripts in order.
+
+    Supports template variables in script path and args using ${VAR_NAME} syntax.
+
     Returns True if all scripts ran successfully, False if any failed.
     Stops at the first failure.
     """
@@ -239,7 +256,7 @@ def run_hook_scripts(hooks: list[HookScript]) -> bool:
 
     all_success = True
     for hook in hooks:
-        if not run_hook_script(hook):
+        if not run_hook_script(hook, template_vars):
             all_success = False
             break
 
@@ -272,10 +289,26 @@ def build_push_container(
         build_format=config.docker_config.build_format,
     )
 
+    # Build template variables for hook scripts
+    image_name = (
+        deployment_name if not image_prefix else os.path.join(image_prefix, deployment_name)
+    )
+    full_image = f"{config.docker_config.container_registry}/{image_name}:{tag}"
+
+    template_vars = {
+        "DAGSTER_UC_IMAGE_NAME": image_name,
+        "DAGSTER_UC_IMAGE_TAG": tag,
+        "DAGSTER_UC_FULL_IMAGE": full_image,
+        "DAGSTER_UC_DEPLOYMENT_NAME": deployment_name,
+        "DAGSTER_UC_BRANCH_NAME": branch_name,
+        "DAGSTER_UC_REGISTRY": config.docker_config.container_registry,
+        "DAGSTER_UC_ENVIRONMENT": config.environment,
+    }
+
     # Run pre-deployment hooks after build and push
     if config.hooks.pre_deployment:
         logger.info("Running pre-deployment hooks...")
-        run_hook_scripts(config.hooks.pre_deployment)
+        run_hook_scripts(config.hooks.pre_deployment, template_vars)
 
 
 @deployment_app.command(
