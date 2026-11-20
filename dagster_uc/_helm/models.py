@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import enum
 import pathlib
 import typing as t
@@ -429,7 +429,7 @@ class ReleaseRevision(ModelWithCommand):
         ...,
         description="The status of the revision.",
     )
-    updated: datetime.datetime = Field(
+    updated: dt.datetime = Field(
         ...,
         description="The time at which this revision was updated.",
     )

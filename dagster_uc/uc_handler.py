@@ -201,7 +201,7 @@ class DagsterUserCodeHandler:
             self.config.docker_config.use_az_login
             and self.config.docker_config.container_registry_chart_path is not None
         ):
-            login_registry_helm(self.config.docker_config.container_registry)
+            login_registry_helm(self.config.docker_config.deployment_container_registry)
 
         RELEASE_NAME = self.config.dagster_chart_config.release_name  # noqa
         helm_client = Client(kubecontext=self.config.kubernetes_config.context)
@@ -220,7 +220,7 @@ class DagsterUserCodeHandler:
             chart = loop.run_until_complete(
                 helm_client.get_chart(
                     chart_ref=os.path.join(
-                        f"oci://{self.config.docker_config.container_registry}",
+                        f"oci://{self.config.docker_config.deployment_container_registry}",
                         self.config.docker_config.container_registry_chart_path,
                     ),
                     version=self.config.dagster_version
@@ -290,7 +290,7 @@ class DagsterUserCodeHandler:
             "name": name,
             "image": {
                 "repository": os.path.join(
-                    self.config.docker_config.container_registry,
+                    self.config.docker_config.deployment_container_registry,
                     image_prefix or "",
                     name,
                 ),

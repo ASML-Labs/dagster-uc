@@ -6,6 +6,7 @@ import logging
 import os
 import pprint
 import re
+import subprocess
 import time
 from typing import Annotated, cast
 
@@ -19,6 +20,7 @@ from dagster_uc.config import (
     DagsterUserCodeChartConfiguration,
     DagsterUserCodeConfiguration,
     DockerConfiguration,
+    HookScript,
     KubernetesConfiguration,
     KubernetesEnvVar,
     load_config,
@@ -190,6 +192,60 @@ def default(
         logger.debug(f"Done: Switched kubernetes context to {config.environment}")
 
 
+def run_hook_script(hook: HookScript) -> bool:
+    """Run a single hook script with its arguments.
+    Returns True if the script ran successfully, False otherwise.
+    """
+    if not hook.script:
+        logger.debug("No hook script configured, skipping.")
+        return True
+
+    logger.info(f"Running hook script: {hook.script} with args: {hook.args}")
+
+    try:
+        cmd = ["python3", hook.script] + hook.args
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout:
+            logger.info(f"Hook script output:\n{result.stdout}")
+        if result.stderr:
+            logger.warning(f"Hook script errors:\n{result.stderr}")
+        logger.info("Hook script completed successfully.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Hook script failed with exit code {e.returncode}")
+        if e.stdout:
+            logger.error(f"Hook script output:\n{e.stdout}")
+        if e.stderr:
+            logger.error(f"Hook script errors:\n{e.stderr}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to run hook script: {e}")
+        return False
+
+
+def run_hook_scripts(hooks: list[HookScript]) -> bool:
+    """Run multiple hook scripts in order.
+    Returns True if all scripts ran successfully, False if any failed.
+    Stops at the first failure.
+    """
+    if not hooks:
+        logger.debug("No hook scripts configured, skipping.")
+        return True
+
+    all_success = True
+    for hook in hooks:
+        if not run_hook_script(hook):
+            all_success = False
+            break
+
+    return all_success
+
+
 def build_push_container(
     deployment_name: str,
     branch_name: str,
@@ -215,6 +271,11 @@ def build_push_container(
         build_args=config.docker_config.docker_build_args,
         build_format=config.docker_config.build_format,
     )
+
+    # Run pre-deployment hooks after build and push
+    if config.hooks.pre_deployment:
+        logger.info("Running pre-deployment hooks...")
+        run_hook_scripts(config.hooks.pre_deployment)
 
 
 @deployment_app.command(
