@@ -25,7 +25,7 @@ from dagster_uc._helm.errors import (
 class SafeLoader(yaml.SafeLoader):
     """We use a custom YAML loader that doesn't bork on plain equals '=' signs.
 
-    It was originally designated with a special meaning, but noone uses it:
+    It was originally designated with a special meaning, but no one uses it:
 
         https://github.com/yaml/pyyaml/issues/89
         https://yaml.org/type/value.html
