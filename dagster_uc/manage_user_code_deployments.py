@@ -89,7 +89,7 @@ def init_config(
         code_path=typer.prompt("Path of the Definitions python file inside docker image"),
         repository_root=typer.prompt("Path of project scope", default="."),
         dagster_version=typer.prompt(
-            "Version of dagster in project (should mirror dagster depoyment!)",
+            "Version of dagster in project (should mirror dagster deployment    !)",
         ),
         cicd=typer.confirm(
             "Whether it's executed in CICD. If set to True, then the deployment_name is created from the env",
