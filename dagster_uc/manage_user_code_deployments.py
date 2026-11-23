@@ -40,12 +40,13 @@ HOOK_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 
 def render_hook_template(value: str, template_vars: dict[str, str]) -> str:
     """Render a hook template string with the given variables.
-    
+
     Recognizes {{ variable_name }} pattern and replaces with corresponding value.
     Supports optional whitespace inside the braces.
     Variable names are case-insensitive (normalized to lowercase before lookup).
     Raises ValueError for unknown variables or unresolved placeholders.
     """
+
     def replace(match: re.Match[str]) -> str:
         original_name = match.group(1)
         name = original_name.lower()
@@ -54,20 +55,20 @@ def render_hook_template(value: str, template_vars: dict[str, str]) -> str:
             available = ", ".join(sorted(template_vars))
             raise ValueError(
                 f"Unknown hook template variable {original_name!r}. "
-                f"Available variables: {available}"
+                f"Available variables: {available}",
             )
 
         return template_vars[name]
-    
+
     rendered = HOOK_TEMPLATE_PATTERN.sub(replace, value)
-    
+
     # Defensive validation: unresolved dagster-uc hook placeholders
     # must never reach the subprocess.
     if HOOK_TEMPLATE_PATTERN.search(rendered):
         raise ValueError(
-            f"Unresolved hook template variable in: {rendered!r}"
+            f"Unresolved hook template variable in: {rendered!r}",
         )
-    
+
     return rendered
 
 
@@ -218,7 +219,10 @@ def default(
 
         if verbose:
             config.verbose = True
-        logger.debug(f"Switching kubernetes context to {config.environment}...")
+        logger.debug(
+            "Switching kubernetes context to %s...",
+            config.environment,
+        )
         kr8s_api = kr8s.api(
             context=f"{config.kubernetes_config.context}",
             namespace=config.kubernetes_config.namespace,
@@ -226,7 +230,10 @@ def default(
 
         handler = DagsterUserCodeHandler(config, kr8s_api)
         handler.maybe_create_user_deployments_configmap()
-        logger.debug(f"Done: Switched kubernetes context to {config.environment}")
+        logger.debug(
+            "Done: Switched kubernetes context to %s",
+            config.environment,
+        )
 
 
 def run_hook_script(

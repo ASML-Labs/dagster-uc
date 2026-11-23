@@ -1,6 +1,5 @@
 """Tests for hook template variable substitution."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,7 +9,6 @@ from dagster_uc.manage_user_code_deployments import (
     HOOK_TEMPLATE_PATTERN,
     render_hook_template,
     run_hook_script,
-    run_hook_scripts,
 )
 
 
@@ -106,7 +104,10 @@ class TestRenderHookTemplate:
         }
         # Test lowercase
         assert render_hook_template("{{ image_name }}", template_vars) == "myproject--feat-branch"
-        assert render_hook_template("{{ image_tag }}", template_vars) == "0.1.0+branch.feat-branch.abc123"
+        assert (
+            render_hook_template("{{ image_tag }}", template_vars)
+            == "0.1.0+branch.feat-branch.abc123"
+        )
         assert (
             render_hook_template("{{ full_image }}", template_vars)
             == "ghcr.io/myorg/myproject--feat-branch:0.1.0+branch.feat-branch.abc123"
@@ -313,7 +314,7 @@ class TestUnknownVariables:
         """Test that unknown variables fail before subprocess execution."""
         hook = HookScript(script="echo hello", args=["{{ unknown_var }}"])
         template_vars = {"environment": "dev"}
-        
+
         with pytest.raises(ValueError) as exc_info:
             run_hook_script(hook, template_vars)
         assert "unknown_var" in str(exc_info.value)
@@ -331,14 +332,14 @@ class TestNoPlaceholders:
     def test_empty_args_list(self):
         """Test hook with empty args list."""
         hook = HookScript(script="tests/test_hooks.py", args=[])
-        
+
         with patch("dagster_uc.manage_user_code_deployments.subprocess.run") as mock_run:
             mock_result = MagicMock()
             mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
             mock_run.return_value = mock_result
-            
+
             result = run_hook_script(hook, {})
             assert result is True
 
@@ -373,59 +374,64 @@ class TestSubprocessArguments:
         """Test that subprocess receives fully rendered arguments."""
         hook = HookScript(
             script="scripts/deploy.py",
-            args=["--param", "environment={{ ENVIRONMENT }}", "--param", "imageName={{ FULL_IMAGE }}"]
+            args=[
+                "--param",
+                "environment={{ ENVIRONMENT }}",
+                "--param",
+                "imageName={{ FULL_IMAGE }}",
+            ],
         )
         template_vars = {
             "environment": "dev",
             "full_image": "example.azurecr.io/simba/foo:123",
         }
-        
+
         with patch("dagster_uc.manage_user_code_deployments.subprocess.run") as mock_run:
             mock_result = MagicMock()
             mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
             mock_run.return_value = mock_result
-            
+
             result = run_hook_script(hook, template_vars)
-            
+
             # Verify subprocess.run was called with rendered arguments
             assert mock_run.called
             call_args = mock_run.call_args[0][0]
-            
+
             # Check the command contains the rendered values
             assert "scripts/deploy.py" in call_args
             assert "--param" in call_args
             assert "environment=dev" in call_args
             assert "imageName=example.azurecr.io/simba/foo:123" in call_args
-            
+
             # Ensure no unresolved placeholders
             for arg in call_args:
                 assert "{{" not in arg
-            
+
             assert result is True
 
     def test_subprocess_receives_rendered_script_path(self):
         """Test that subprocess receives rendered script path."""
         hook = HookScript(
             script="scripts/{{ environment }}/deploy.py",
-            args=[]
+            args=[],
         )
         template_vars = {"environment": "prod"}
-        
+
         with patch("dagster_uc.manage_user_code_deployments.subprocess.run") as mock_run:
             mock_result = MagicMock()
             mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
             mock_run.return_value = mock_result
-            
+
             result = run_hook_script(hook, template_vars)
-            
+
             # Verify the script path is rendered
             assert mock_run.called
             call_args = mock_run.call_args[0][0]
             assert "scripts/prod/deploy.py" in call_args
             assert "{{" not in call_args[0]  # Script path should not have placeholders
-            
+
             assert result is True
