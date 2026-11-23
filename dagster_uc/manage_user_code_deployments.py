@@ -247,6 +247,7 @@ def run_hook_script(
 
     # Apply hook template substitution to script path and args
     script = render_hook_template(hook.script, template_vars)
+    logger.info(hook.args)
     args = [render_hook_template(arg, template_vars) for arg in hook.args]
 
     logger.info(f"Running hook script: {script} with args: {args}")
