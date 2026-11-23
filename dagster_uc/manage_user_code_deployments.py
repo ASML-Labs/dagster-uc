@@ -43,15 +43,32 @@ def render_hook_template(value: str, template_vars: dict[str, str]) -> str:
     
     Recognizes {{ variable_name }} pattern and replaces with corresponding value.
     Supports optional whitespace inside the braces.
-    Raises ValueError for unknown variables.
+    Variable names are case-insensitive (normalized to lowercase before lookup).
+    Raises ValueError for unknown variables or unresolved placeholders.
     """
     def replace(match: re.Match[str]) -> str:
-        name = match.group(1)
+        original_name = match.group(1)
+        name = original_name.lower()
+
         if name not in template_vars:
-            raise ValueError(f"Unknown hook template variable: {name!r}")
+            available = ", ".join(sorted(template_vars))
+            raise ValueError(
+                f"Unknown hook template variable {original_name!r}. "
+                f"Available variables: {available}"
+            )
+
         return template_vars[name]
     
-    return HOOK_TEMPLATE_PATTERN.sub(replace, value)
+    rendered = HOOK_TEMPLATE_PATTERN.sub(replace, value)
+    
+    # Defensive validation: unresolved dagster-uc hook placeholders
+    # must never reach the subprocess.
+    if HOOK_TEMPLATE_PATTERN.search(rendered):
+        raise ValueError(
+            f"Unresolved hook template variable in: {rendered!r}"
+        )
+    
+    return rendered
 
 
 app = typer.Typer(invoke_without_command=True)
@@ -317,13 +334,13 @@ def build_push_container(
     full_image = f"{config.docker_config.container_registry}/{image_name}:{tag}"
 
     template_vars = {
-        "IMAGE_NAME": image_name,
-        "IMAGE_TAG": tag,
-        "FULL_IMAGE": full_image,
-        "DEPLOYMENT_NAME": deployment_name,
-        "BRANCH_NAME": branch_name,
-        "REGISTRY": config.docker_config.container_registry,
-        "ENVIRONMENT": config.environment,
+        "image_name": image_name,
+        "image_tag": tag,
+        "full_image": full_image,
+        "deployment_name": deployment_name,
+        "branch_name": branch_name,
+        "registry": config.docker_config.container_registry,
+        "environment": config.environment,
     }
 
     # Run pre-deployment hooks after build and push

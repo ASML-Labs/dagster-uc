@@ -21,6 +21,7 @@ from dagster_uc.config import load_config
                 "use_latest_chart_version": True,
                 "docker_config": {
                     "container_registry": "dagster-uc.dev.acr.io",
+                    "deployment_container_registry": "dagster-uc.dev.acr.io",
                     "dockerfile": "docker/dev.Dockerfile",
                     "docker_root": ".",
                     "docker_env_vars": ["FOO", "FOO='string'"],
@@ -58,6 +59,10 @@ from dagster_uc.config import load_config
                     "deployment_semaphore_name": "dagster-uc-semaphore",
                     "release_name": "dagster-user-code",
                 },
+                "hooks": {
+                    "pre_deployment": [],
+                    "post_deployment": [],
+                },
             },
         ),
         (
@@ -75,6 +80,7 @@ from dagster_uc.config import load_config
                 "use_latest_chart_version": True,
                 "docker_config": {
                     "container_registry": "dagster-uc.acc.acr.io",
+                    "deployment_container_registry": "dagster-uc.acc.acr.io",
                     "dockerfile": "docker/acc.Dockerfile",
                     "docker_root": ".",
                     "docker_env_vars": ["FOO", "FOO='string'"],
@@ -112,6 +118,10 @@ from dagster_uc.config import load_config
                     "deployment_semaphore_name": "dagster-uc-semaphore",
                     "release_name": "dagster-user-code",
                 },
+                "hooks": {
+                    "pre_deployment": [],
+                    "post_deployment": [],
+                },
             },
         ),
     ],
@@ -120,3 +130,28 @@ def test_load_config(environment: str, expected: dict):  # noqa
     dev_config = load_config(environment, path="tests/config/.config_user_code_deployments.yaml")
 
     assert dev_config.model_dump() == expected
+
+
+def test_deployment_container_registry_defaults_to_container_registry():
+    """Test that deployment_container_registry defaults to container_registry if not set."""
+    from dagster_uc.config import DockerConfiguration
+
+    # Test default behavior
+    docker_config = DockerConfiguration(
+        container_registry="registry.example.com",
+        dockerfile="Dockerfile",
+    )
+    assert docker_config.deployment_container_registry == "registry.example.com"
+
+
+def test_deployment_container_registry_can_be_overridden():
+    """Test that deployment_container_registry can be set independently."""
+    from dagster_uc.config import DockerConfiguration
+
+    docker_config = DockerConfiguration(
+        container_registry="registry.example.com",
+        deployment_container_registry="different-registry.example.com",
+        dockerfile="Dockerfile",
+    )
+    assert docker_config.container_registry == "registry.example.com"
+    assert docker_config.deployment_container_registry == "different-registry.example.com"
