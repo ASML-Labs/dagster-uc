@@ -8,7 +8,6 @@ import pprint
 import re
 import subprocess
 import time
-from string import Template
 from typing import Annotated, cast
 
 import kr8s
@@ -34,6 +33,26 @@ from dagster_uc.utils import (
     gen_tag,
     is_command_available,
 )
+
+# Regex pattern for hook template variables: {{ variable_name }}
+HOOK_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
+
+
+def render_hook_template(value: str, template_vars: dict[str, str]) -> str:
+    """Render a hook template string with the given variables.
+    
+    Recognizes {{ variable_name }} pattern and replaces with corresponding value.
+    Supports optional whitespace inside the braces.
+    Raises ValueError for unknown variables.
+    """
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in template_vars:
+            raise ValueError(f"Unknown hook template variable: {name!r}")
+        return template_vars[name]
+    
+    return HOOK_TEMPLATE_PATTERN.sub(replace, value)
+
 
 app = typer.Typer(invoke_without_command=True)
 deployment_app = typer.Typer(
@@ -199,7 +218,7 @@ def run_hook_script(
 ) -> bool:
     """Run a single hook script with its arguments.
 
-    Supports template variables in script path and args using ${VAR_NAME} syntax.
+    Supports hook template variables using {{ variable_name }} syntax.
 
     Returns True if the script ran successfully, False otherwise.
     """
@@ -207,9 +226,11 @@ def run_hook_script(
         logger.debug("No hook script configured, skipping.")
         return True
 
-    # Apply template substitution to script path and args
-    script = Template(hook.script).substitute(template_vars or {})
-    args = [Template(arg).substitute(template_vars or {}) for arg in hook.args]
+    template_vars = template_vars or {}
+
+    # Apply hook template substitution to script path and args
+    script = render_hook_template(hook.script, template_vars)
+    args = [render_hook_template(arg, template_vars) for arg in hook.args]
 
     logger.info(f"Running hook script: {script} with args: {args}")
 
@@ -245,7 +266,7 @@ def run_hook_scripts(
 ) -> bool:
     """Run multiple hook scripts in order.
 
-    Supports template variables in script path and args using ${VAR_NAME} syntax.
+    Supports hook template variables using {{ variable_name }} syntax.
 
     Returns True if all scripts ran successfully, False if any failed.
     Stops at the first failure.
@@ -296,13 +317,13 @@ def build_push_container(
     full_image = f"{config.docker_config.container_registry}/{image_name}:{tag}"
 
     template_vars = {
-        "DAGSTER_UC_IMAGE_NAME": image_name,
-        "DAGSTER_UC_IMAGE_TAG": tag,
-        "DAGSTER_UC_FULL_IMAGE": full_image,
-        "DAGSTER_UC_DEPLOYMENT_NAME": deployment_name,
-        "DAGSTER_UC_BRANCH_NAME": branch_name,
-        "DAGSTER_UC_REGISTRY": config.docker_config.container_registry,
-        "DAGSTER_UC_ENVIRONMENT": config.environment,
+        "IMAGE_NAME": image_name,
+        "IMAGE_TAG": tag,
+        "FULL_IMAGE": full_image,
+        "DEPLOYMENT_NAME": deployment_name,
+        "BRANCH_NAME": branch_name,
+        "REGISTRY": config.docker_config.container_registry,
+        "ENVIRONMENT": config.environment,
     }
 
     # Run pre-deployment hooks after build and push
