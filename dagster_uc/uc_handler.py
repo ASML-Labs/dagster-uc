@@ -1,4 +1,5 @@
 from __future__ import annotations
+from multiprocessing import Value
 
 import asyncio
 import logging
@@ -201,6 +202,8 @@ class DagsterUserCodeHandler:
             self.config.docker_config.use_az_login
             and self.config.docker_config.container_registry_chart_path is not None
         ):
+            if self.config.docker_config.deployment_container_registry is None:
+                raise ValueError("Deployment Container Registry is not set")
             login_registry_helm(self.config.docker_config.deployment_container_registry)
 
         RELEASE_NAME = self.config.dagster_chart_config.release_name  # noqa
@@ -286,11 +289,14 @@ class DagsterUserCodeHandler:
         """
         import os
 
+        deployment_container_registry = self.config.docker_config.deployment_container_registry
+        if deployment_container_registry is None:
+            raise ValueError("Deployment container registry was not set")
         deployment = {
             "name": name,
             "image": {
                 "repository": os.path.join(
-                    self.config.docker_config.deployment_container_registry,
+                    deployment_container_registry,
                     image_prefix or "",
                     name,
                 ),
