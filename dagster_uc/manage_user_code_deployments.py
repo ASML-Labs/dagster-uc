@@ -254,10 +254,14 @@ def run_hook_script(
 
     # Apply hook template substitution to script path and args
     script = render_hook_template(hook.script, template_vars)
-    logger.info(hook.args)
+    logger.info("Hook args: %s", hook.args)
     args = [render_hook_template(arg, template_vars) for arg in hook.args]
 
-    logger.info(f"Running hook script: {script} with args: {args}")
+    logger.info(
+        "Running hook script: %s with args: %s",
+        script,
+        args,
+    )
 
     try:
         cmd = ["python3", script] + args
@@ -268,20 +272,23 @@ def run_hook_script(
             text=True,
         )
         if result.stdout:
-            logger.info(f"Hook script output:\n{result.stdout}")
+            logger.info("Hook script output:\n%s", result.stdout)
         if result.stderr:
-            logger.warning(f"Hook script errors:\n{result.stderr}")
+            logger.warning("Hook script errors:\n%s", result.stderr)
         logger.info("Hook script completed successfully.")
         return True
     except subprocess.CalledProcessError as e:
-        logger.error(f"Hook script failed with exit code {e.returncode}")
+        logger.error(
+            "Hook script failed with exit code %s",
+            e.returncode,
+        )
         if e.stdout:
-            logger.error(f"Hook script output:\n{e.stdout}")
+            logger.error("Hook script output:\n%s", e.stdout)
         if e.stderr:
-            logger.error(f"Hook script errors:\n{e.stderr}")
+            logger.error("Hook script errors:\n%s", e.stderr)
         return False
     except Exception as e:
-        logger.error(f"Failed to run hook script: {e}")
+        logger.error("Failed to run hook script: %s", e)
         return False
 
 
@@ -397,7 +404,7 @@ def deployment_revive(
             ),
         )
         handler.deploy_to_k8s()
-        logger.info(f"Deployed {name}")
+        logger.info("Deployed %s", name)
     else:
         raise Exception(f'Deployment "{name}" already exists')
 
@@ -485,7 +492,10 @@ def check_deployment(
         name = name.replace(":", "--")
     if not handler._check_deployment_exists(name):
         logger.warning(
-            f"Deployment with name '{name}' does not seem to exist in environment '{config.environment}'. Attempting to proceed with status check anyways.",
+            "Deployment with name '%s' does not seem to exist in environment '%s'. "
+            "Attempting to proceed with status check anyways.",
+            name,
+            config.environment,
         )
     typer.echo(f"\033[1mStatus for deployment {name}\033[0m")
     for pod in handler.api.get(
@@ -608,7 +618,10 @@ def deployment_deploy(
     count = 0
     while not handler.acquire_semaphore(reset_lock, name=deployment_name):
         logger.error(
-            f"Attempt {count}: {handler.acquire_semaphore_locker()} is in progress. Trying again in 10 seconds. You can force a reset of the deployment lock by using 'dagster-uc deployment deploy --reset-lock'",
+            "Attempt %s: %s is in progress. Trying again in 10 seconds. "
+            "You can force a reset of the deployment lock by using 'dagster-uc deployment deploy --reset-lock'",
+            count,
+            handler.acquire_semaphore_locker(),
         )
         count += 1
         time.sleep(10)
@@ -646,7 +659,9 @@ def deployment_deploy(
 
         if not handler._check_deployment_exists(deployment_name):
             logger.info(
-                f"Deployment with name '{deployment_name}' does not exist yet in '{config.environment}'. Adding deployment to configmap",
+                "Deployment with name '%s' does not exist yet in '%s'. Adding deployment to configmap",
+                deployment_name,
+                config.environment,
             )
             handler.add_user_deployment_to_configmap(
                 handler.gen_new_deployment_yaml(
@@ -658,7 +673,9 @@ def deployment_deploy(
             handler.deploy_to_k8s()
         else:
             logger.info(
-                f"Deployment with name '{deployment_name}' exists in '{config.environment}'. Updating deployment in configmap",
+                "Deployment with name '%s' exists in '%s'. Updating deployment in configmap",
+                deployment_name,
+                config.environment,
             )
             # TODO(ion): make this into a single operation (replace)
             handler.remove_user_deployment_from_configmap(deployment_name)
