@@ -201,7 +201,9 @@ class DagsterUserCodeHandler:
             self.config.docker_config.use_az_login
             and self.config.docker_config.container_registry_chart_path is not None
         ):
-            login_registry_helm(self.config.docker_config.container_registry)
+            if self.config.docker_config.deployment_container_registry is None:
+                raise ValueError("Deployment Container Registry is not set")
+            login_registry_helm(self.config.docker_config.deployment_container_registry)
 
         RELEASE_NAME = self.config.dagster_chart_config.release_name  # noqa
         helm_client = Client(kubecontext=self.config.kubernetes_config.context)
@@ -220,7 +222,7 @@ class DagsterUserCodeHandler:
             chart = loop.run_until_complete(
                 helm_client.get_chart(
                     chart_ref=os.path.join(
-                        f"oci://{self.config.docker_config.container_registry}",
+                        f"oci://{self.config.docker_config.deployment_container_registry}",
                         self.config.docker_config.container_registry_chart_path,
                     ),
                     version=self.config.dagster_version
@@ -286,11 +288,14 @@ class DagsterUserCodeHandler:
         """
         import os
 
+        deployment_container_registry = self.config.docker_config.deployment_container_registry
+        if deployment_container_registry is None:
+            raise ValueError("Deployment container registry was not set")
         deployment = {
             "name": name,
             "image": {
                 "repository": os.path.join(
-                    self.config.docker_config.container_registry,
+                    deployment_container_registry,
                     image_prefix or "",
                     name,
                 ),
@@ -354,7 +359,7 @@ class DagsterUserCodeHandler:
                 },
             },
         }
-        logger.debug(f"Generated user code deployment:\n{deployment}")
+        logger.debug("Generated user code deployment:\n%s", deployment)
         return deployment
 
     def _read_namespaced_config_map(
@@ -519,7 +524,10 @@ class DagsterUserCodeHandler:
         else:
             cluster_dagster_version = Version(cluster_dagster_version[0])
 
-        logger.debug(f"Cluster dagster version detected to be '{cluster_dagster_version}'")
+        logger.debug(
+            "Cluster dagster version detected to be '%s'",
+            cluster_dagster_version,
+        )
         if not cluster_dagster_version == local_dagster_version:
             raise Exception(
                 f"Dagster version mismatch. Local: {local_dagster_version}, Cluster: {cluster_dagster_version}. Try pulling the latest changes from the develop branch and then rebuilding the local python environment.",
@@ -597,7 +605,7 @@ class DagsterUserCodeHandler:
             semaphore.patch({"data": {"locked": "false"}})
             logger.debug("patched semaphore to locked: false")
         except Exception as e:
-            logger.error(f"Failed to release deployment lock: {e}")
+            logger.error("Failed to release deployment lock: %s", e)
 
     def _get_project_name(self) -> str | None:
         import tomli

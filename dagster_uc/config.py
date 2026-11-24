@@ -6,7 +6,7 @@ from pathlib import Path
 from string import Template
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import (
     BaseSettings,
     EnvSettingsSource,
@@ -124,6 +124,10 @@ class DockerConfiguration(BaseModel):
     """Configuration specific for Docker or Container registry related."""
 
     container_registry: str
+    deployment_container_registry: str | None = Field(
+        default=None,
+        description="Container registry for deployments. Defaults to container_registry if not set.",
+    )
     dockerfile: str
     docker_root: str = Field(default="")
     docker_env_vars: list[str] = Field(default=[])
@@ -132,6 +136,13 @@ class DockerConfiguration(BaseModel):
     use_az_login: bool = Field(default=True)
     container_registry_chart_path: str | None = Field(default=None)
     build_format: Literal["OCI", "docker"] = "OCI"
+
+    @model_validator(mode="after")
+    def set_default_deployment_registry(self) -> DockerConfiguration:
+        """If not set, deployment registry should be set to container_registry"""
+        if self.deployment_container_registry is None:
+            self.deployment_container_registry = self.container_registry
+        return self
 
 
 class HelmConfiguration(BaseModel):
@@ -168,6 +179,26 @@ class DagsterUserCodeChartConfiguration(BaseModel):
     release_name: str = "dagster-user-code"
 
 
+class HookScript(BaseModel):
+    """Configuration for a single hook script."""
+
+    script: str = Field(default="", description="Path to the Python script")
+    args: list[str] = Field(default_factory=list, description="Arguments to pass to the script")
+
+
+class DeploymentHooks(BaseModel):
+    """Configuration for pre and post deployment hooks."""
+
+    pre_deployment: list[HookScript] = Field(
+        default_factory=list,
+        description="List of pre-deployment hook scripts",
+    )
+    post_deployment: list[HookScript] = Field(
+        default_factory=list,
+        description="List of post-deployment hook scripts",
+    )
+
+
 class DagsterUserCodeConfiguration(_BaseSettingsWithYamlAndEnv):
     """Dagster User Code configuration"""
 
@@ -192,6 +223,10 @@ class DagsterUserCodeConfiguration(_BaseSettingsWithYamlAndEnv):
     dagster_chart_config: DagsterUserCodeChartConfiguration = Field(
         default_factory=DagsterUserCodeChartConfiguration,
         alias="chart",
+    )
+    hooks: DeploymentHooks = Field(
+        default_factory=DeploymentHooks,
+        alias="hooks",
     )
 
 

@@ -40,7 +40,7 @@ def run_cli_command(
     shell: bool = True,
 ) -> subprocess.CompletedProcess | TimeoutExpired:
     """Run the cli command while capturing the output, so its output is not directly shown."""
-    logger.debug(f"[running command] {cmd}")
+    logger.debug("[running command] %s", cmd)
     if input_str == "":
         input_str_bytes = None
     elif input_str is not None:
@@ -111,7 +111,7 @@ def run_cli_command_streaming(cmd: str, as_user: str = "") -> None:
     """Run the cli command without capturing the output, so it streams to the console."""
     if as_user:
         cmd = f"sudo -u {as_user} {cmd}"
-    logger.debug(f"[running command] {cmd}")
+    logger.debug("[running command] %s", cmd)
     Popen(cmd, stdout=sys.stdout, stderr=sys.stderr, env=os.environ.copy(), shell=True)
 
 

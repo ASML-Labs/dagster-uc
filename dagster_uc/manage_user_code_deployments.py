@@ -6,6 +6,7 @@ import logging
 import os
 import pprint
 import re
+import subprocess
 import time
 from typing import Annotated, cast
 
@@ -19,6 +20,7 @@ from dagster_uc.config import (
     DagsterUserCodeChartConfiguration,
     DagsterUserCodeConfiguration,
     DockerConfiguration,
+    HookScript,
     KubernetesConfiguration,
     KubernetesEnvVar,
     load_config,
@@ -31,6 +33,44 @@ from dagster_uc.utils import (
     gen_tag,
     is_command_available,
 )
+
+# Regex pattern for hook template variables: {{ variable_name }}
+HOOK_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
+
+
+def render_hook_template(value: str, template_vars: dict[str, str]) -> str:
+    """Render a hook template string with the given variables.
+
+    Recognizes {{ variable_name }} pattern and replaces with corresponding value.
+    Supports optional whitespace inside the braces.
+    Variable names are case-insensitive (normalized to lowercase before lookup).
+    Raises ValueError for unknown variables or unresolved placeholders.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        original_name = match.group(1)
+        name = original_name.lower()
+
+        if name not in template_vars:
+            available = ", ".join(sorted(template_vars))
+            raise ValueError(
+                f"Unknown hook template variable {original_name!r}. "
+                f"Available variables: {available}",
+            )
+
+        return template_vars[name]
+
+    rendered = HOOK_TEMPLATE_PATTERN.sub(replace, value)
+
+    # Defensive validation: unresolved dagster-uc hook placeholders
+    # must never reach the subprocess.
+    if HOOK_TEMPLATE_PATTERN.search(rendered):
+        raise ValueError(
+            f"Unresolved hook template variable in: {rendered!r}",
+        )
+
+    return rendered
+
 
 app = typer.Typer(invoke_without_command=True)
 deployment_app = typer.Typer(
@@ -179,7 +219,10 @@ def default(
 
         if verbose:
             config.verbose = True
-        logger.debug(f"Switching kubernetes context to {config.environment}...")
+        logger.debug(
+            "Switching kubernetes context to %s...",
+            config.environment,
+        )
         kr8s_api = kr8s.api(
             context=f"{config.kubernetes_config.context}",
             namespace=config.kubernetes_config.namespace,
@@ -187,7 +230,90 @@ def default(
 
         handler = DagsterUserCodeHandler(config, kr8s_api)
         handler.maybe_create_user_deployments_configmap()
-        logger.debug(f"Done: Switched kubernetes context to {config.environment}")
+        logger.debug(
+            "Done: Switched kubernetes context to %s",
+            config.environment,
+        )
+
+
+def run_hook_script(
+    hook: HookScript,
+    template_vars: dict[str, str] | None = None,
+) -> bool:
+    """Run a single hook script with its arguments.
+
+    Supports hook template variables using {{ variable_name }} syntax.
+
+    Returns True if the script ran successfully, False otherwise.
+    """
+    if not hook.script:
+        logger.debug("No hook script configured, skipping.")
+        return True
+
+    template_vars = template_vars or {}
+
+    # Apply hook template substitution to script path and args
+    script = render_hook_template(hook.script, template_vars)
+    logger.info("Hook args: %s", hook.args)
+    args = [render_hook_template(arg, template_vars) for arg in hook.args]
+
+    logger.info(
+        "Running hook script: %s with args: %s",
+        script,
+        args,
+    )
+
+    try:
+        cmd = ["python3", script] + args
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout:
+            logger.info("Hook script output:\n%s", result.stdout)
+        if result.stderr:
+            logger.warning("Hook script errors:\n%s", result.stderr)
+        logger.info("Hook script completed successfully.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(
+            "Hook script failed with exit code %s",
+            e.returncode,
+        )
+        if e.stdout:
+            logger.error("Hook script output:\n%s", e.stdout)
+        if e.stderr:
+            logger.error("Hook script errors:\n%s", e.stderr)
+        return False
+    except Exception as e:
+        logger.error("Failed to run hook script: %s", e)
+        return False
+
+
+def run_hook_scripts(
+    hooks: list[HookScript],
+    template_vars: dict[str, str] | None = None,
+) -> bool:
+    """Run multiple hook scripts in order.
+
+    Supports hook template variables using {{ variable_name }} syntax.
+
+    Returns True if all scripts ran successfully, False if any failed.
+    Stops at the first failure.
+    """
+    if not hooks:
+        logger.debug("No hook scripts configured, skipping.")
+        return True
+
+    all_success = True
+    for hook in hooks:
+        if not run_hook_script(hook, template_vars):
+            all_success = False
+            break
+
+    return all_success
 
 
 def build_push_container(
@@ -215,6 +341,27 @@ def build_push_container(
         build_args=config.docker_config.docker_build_args,
         build_format=config.docker_config.build_format,
     )
+
+    # Build template variables for hook scripts
+    image_name = (
+        deployment_name if not image_prefix else os.path.join(image_prefix, deployment_name)
+    )
+    full_image = f"{config.docker_config.container_registry}/{image_name}:{tag}"
+
+    template_vars = {
+        "image_name": image_name,
+        "image_tag": tag,
+        "full_image": full_image,
+        "deployment_name": deployment_name,
+        "branch_name": branch_name,
+        "registry": config.docker_config.container_registry,
+        "environment": config.environment,
+    }
+
+    # Run pre-deployment hooks after build and push
+    if config.hooks.pre_deployment:
+        logger.info("Running pre-deployment hooks...")
+        run_hook_scripts(config.hooks.pre_deployment, template_vars)
 
 
 @deployment_app.command(
@@ -257,7 +404,7 @@ def deployment_revive(
             ),
         )
         handler.deploy_to_k8s()
-        logger.info(f"Deployed {name}")
+        logger.info("Deployed %s", name)
     else:
         raise Exception(f'Deployment "{name}" already exists')
 
@@ -345,7 +492,10 @@ def check_deployment(
         name = name.replace(":", "--")
     if not handler._check_deployment_exists(name):
         logger.warning(
-            f"Deployment with name '{name}' does not seem to exist in environment '{config.environment}'. Attempting to proceed with status check anyways.",
+            "Deployment with name '%s' does not seem to exist in environment '%s'. "
+            "Attempting to proceed with status check anyways.",
+            name,
+            config.environment,
         )
     typer.echo(f"\033[1mStatus for deployment {name}\033[0m")
     for pod in handler.api.get(
@@ -468,7 +618,10 @@ def deployment_deploy(
     count = 0
     while not handler.acquire_semaphore(reset_lock, name=deployment_name):
         logger.error(
-            f"Attempt {count}: {handler.acquire_semaphore_locker()} is in progress. Trying again in 10 seconds. You can force a reset of the deployment lock by using 'dagster-uc deployment deploy --reset-lock'",
+            "Attempt %s: %s is in progress. Trying again in 10 seconds. "
+            "You can force a reset of the deployment lock by using 'dagster-uc deployment deploy --reset-lock'",
+            count,
+            handler.acquire_semaphore_locker(),
         )
         count += 1
         time.sleep(10)
@@ -506,7 +659,9 @@ def deployment_deploy(
 
         if not handler._check_deployment_exists(deployment_name):
             logger.info(
-                f"Deployment with name '{deployment_name}' does not exist yet in '{config.environment}'. Adding deployment to configmap",
+                "Deployment with name '%s' does not exist yet in '%s'. Adding deployment to configmap",
+                deployment_name,
+                config.environment,
             )
             handler.add_user_deployment_to_configmap(
                 handler.gen_new_deployment_yaml(
@@ -518,7 +673,9 @@ def deployment_deploy(
             handler.deploy_to_k8s()
         else:
             logger.info(
-                f"Deployment with name '{deployment_name}' exists in '{config.environment}'. Updating deployment in configmap",
+                "Deployment with name '%s' exists in '%s'. Updating deployment in configmap",
+                deployment_name,
+                config.environment,
             )
             # TODO(ion): make this into a single operation (replace)
             handler.remove_user_deployment_from_configmap(deployment_name)

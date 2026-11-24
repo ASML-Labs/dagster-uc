@@ -33,6 +33,7 @@ The configuration format is now nested and grouped by concerns (e.g. `docker`, `
 * `kubernetes` — Kubernetes-specific settings (context, namespace, resource requests/limits, env and secret lists).
 * `helm` — Helm-related settings (for example, skip schema validation).
 * `chart` — chart-specific values you may want to supply into the user-deployments Helm chart.
+* `hooks` — Pre and post deployment hook scripts.
 * `use_latest_chart_version`, `use_project_name`, and `project_name_override` — deployment behavior flags.
 
 Order of loading configuration:
@@ -80,6 +81,15 @@ defaults:
       - name: dagster-storage-secret
     pull_policy: Always
 
+  # Hooks configuration (grouped under `hooks`)
+  hooks:
+    pre_deployment:
+      - script: "scripts/pre_deploy.py"
+        args: ["--image", "{{ full_image }}", "--env", "${ENVIRONMENT}"]
+    post_deployment:
+      - script: "scripts/post_deploy.py"
+        args: ["--deployment", "{{ deployment_name }}"]
+
   chart: {}
 
 dev:
@@ -89,6 +99,7 @@ dev:
   docker:
     dockerfile: "docker/dev.Dockerfile"
     container_registry: dagster-uc.dev.acr.io
+    deployment_container_registry: dagster-uc.dev.acr.io
 
   kubernetes:
     context: "aks-dev"
@@ -98,6 +109,11 @@ dev:
       - name: ENVIRONMENT
         value: dev
     pull_policy: IfNotPresent
+
+  hooks:
+    pre_deployment:
+      - script: "scripts/pre_deploy_dev.py"
+        args: ["--validate", "--image", "{{ full_image }}"]
 acc:
   environment: acc
   dagster_gui_url: "http://dagster.acc"
@@ -106,6 +122,7 @@ acc:
   docker:
     dockerfile: "docker/acc.Dockerfile"
     container_registry: dagster-uc.acc.acr.io
+    deployment_container_registry: dagster-uc.prod.acr.io
 
   kubernetes:
     context: "aks-acc"
@@ -115,12 +132,18 @@ acc:
       - name: ENVIRONMENT
         value: acc
     include_config_in_launched_runs: False
+
+  hooks:
+    post_deployment:
+      - script: "scripts/post_deploy_acc.py"
+        args: ["--notify", "--slack-channel", "#deployments", "--image", "{{ full_image }}"]
 ```
 
 Notes on common config keys (now nested):
 * `code_path` — path to the Python module that starts your Dagster definitions (used to start the user-code gRPC server).
 * `docker.dockerfile` — path to the Dockerfile to build the image.
 * `docker.container_registry` — target container registry for the built image (per-environment override).
+* `docker.deployment_container_registry` — container registry for deployments. Defaults to `container_registry` if not set. Useful when you want to push to one registry but deploy from another.
 * `docker.image_prefix` — prefix used when naming images.
 * `docker.docker_env_vars` — list of environment variables to pass into the build process.
 * `docker.docker_build_args` - list of build arguments to pass into the build process. 
@@ -131,7 +154,45 @@ Notes on common config keys (now nested):
 * `kubernetes.user_code_deployment_env` — a list of name/value env objects to inject into the user-code deployment container.
 * `kubernetes.user_code_deployment_env_secrets` — a list of secrets to be mounted/injected as environment variables.
 * `kubernetes.pull_policy` - Standard Kubernetes Pull Policy for images, can either be 'IfNotPresent' or 'Always'
-* `kubernetes.include_config_in_launched_runs` - Starting in Dagster 1.13.7, when IncludeConfigInLaunchedRuns is True, node_selector, tolerations, and secrets override anything in the ops_tag. By setting this to False, you will be able to control your nodes with op tags. However, you need to put the kubernetes environment variables and kubernetes secrets  into wherever you define your RunLauncher to enable it to work. 
+* `kubernetes.include_config_in_launched_runs` - Starting in Dagster 1.13.7, when IncludeConfigInLaunchedRuns is True, node_selector, tolerations, and secrets override anything in the ops_tag. By setting this to False, you will be able to control your nodes with op tags. However, you need to put the kubernetes environment variables and kubernetes secrets  into wherever you define your RunLauncher to enable it to work.
+* `hooks.pre_deployment` — list of Python scripts to run after building and pushing the container image but before deploying to Kubernetes. Each script receives its configured arguments. Hooks run in order and stop at the first failure.
+* `hooks.post_deployment` — list of Python scripts to run after deploying to Kubernetes. Each script receives its configured arguments. Hooks run in order and stop at the first failure.
+
+**Template Variables:**
+
+dagster-uc supports two distinct template substitution mechanisms:
+
+1. **OS Environment Variables** (`${VAR_NAME}`): Resolved during config loading from `os.environ`. Use this for secrets, registry credentials, and other environment-specific values.
+   Example: `${CONTAINER_REGISTRY}`, `${AZURE_CLIENT_ID}`
+
+2. **Hook Runtime Variables** (`{{ VARIABLE_NAME }}`): Resolved immediately before hook execution with values generated by dagster-uc. Use this for dynamic deployment information.
+
+**Hook Runtime Variables:**
+Hook script paths and arguments support template substitution using `{{ variable_name }}` syntax. Variable names are case-insensitive. The canonical lowercase forms are:
+
+| Variable | Description |
+|----------|-------------|
+| `{{ environment }}` | The environment name (e.g., `dev`, `acc`, `prod`) |
+| `{{ image_name }}` | The image name (e.g., `myproject--feat-branch`) |
+| `{{ image_tag }}` | The image tag (e.g., `0.1.0+branch.feat-branch.abc123`) |
+| `{{ full_image }}` | Full image reference including registry (e.g., `ghcr.io/myorg/myproject--feat-branch:0.1.0+branch.feat-branch.abc123`) |
+| `{{ deployment_name }}` | The deployment name |
+| `{{ branch_name }}` | The branch name |
+| `{{ registry }}` | The container registry |
+
+**Note:** You can use uppercase (`{{ ENVIRONMENT }}`), lowercase (`{{ environment }}`), or mixed case (`{{ Environment }}`) - all forms work and are normalized to lowercase for lookup.
+
+**Important:** You can use both syntaxes in the same configuration. `${...}` is resolved from OS environment variables when the config loads, while `{{ ... }}` is resolved from runtime values just before the hook runs.
+
+Example hook configuration:
+```yaml
+hooks:
+  pre_deployment:
+    - script: "scripts/notify.py"
+      args: ["--image", "{{ full_image }}", "--env", "${ENVIRONMENT}"]
+```
+
+Here, `{{ full_image }}` is replaced with the actual image reference at runtime (case-insensitive: `{{ FULL_IMAGE }}` would also work), while `${ENVIRONMENT}` is replaced with the OS environment variable value during config loading. 
 * `helm.skip_schema_validation` — useful for older Helm chart setups or when schema validation causes issues.
 * `use_project_name` — when True, the project name from `pyproject.toml` is prefixed to the deployment name.
 * `project_name_override` - When set, the project name from `pyproject.toml` is overridden with this value
